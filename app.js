@@ -1,21 +1,19 @@
 /* =============================================================================
- * Druk rezerwacji · Gazetka FAMIX (v2)
+ * Druk rezerwacji · Gazetka FAMIX (v3)
  * -----------------------------------------------------------------------------
- * - Ładuje bazę z ./data/SC.xlsx
- * - Cena FAMIX = cena_wyliczona (fallback: cena_s)
- * - Edytowalne komórki: Cena FAMIX, VAT, Rabat stały, Rabat prom.,
- *   Promocja netto, Refundacja producenta, Uwagi
- * - Po rab. = Cena FAMIX × (1 − Rabat stały) (obliczane na żywo)
- * - Override'y per towar_id, zapisywane w localStorage
+ * Układ shuttle:
+ *   [Params] | [Picker — lista dostępnych indeksów] | [Editor — pozycje w druku]
+ *
+ * - Cena FAMIX = kolumna cena_s ; VAT = kolumna vat
+ * - Zaznaczasz w Pickerze → "Dodaj zaznaczone →" → pozycje lecą do Editora
+ * - W Editorze każda komórka edytowalna (Cena, VAT, Rabaty, Promocja, Uwagi)
+ * - Override'y per towar_id → localStorage
  * - Podgląd 1:1 z wzorem FAMIX + eksport XLSX + druk PDF
  * ===========================================================================*/
 
 (function () {
   "use strict";
 
-  // -------------------------------------------------------------------------
-  // Stan aplikacji
-  // -------------------------------------------------------------------------
   const STATE = {
     rows: [],
     producers: [],
@@ -29,13 +27,14 @@
       dateFrom: "",
       dateTo: "",
       dateDoc: todayISO(),
-      selectedIds: new Set(),
+      selectedIds: new Set(), // pozycje dodane do druku
       search: "",
-      overrides: {}, // { "<towar_id>": { cena_famix, vat, stale, rabat_prom, promocja_netto, refundacja, uwagi } }
+      overrides: {},          // edytowane wartości per towar_id
     },
+    pickerChecked: new Set(), // transient: zaznaczone w pickerze do dodania
   };
 
-  const STORAGE_KEY = "famix_druk_rezerwacji_v2";
+  const STORAGE_KEY = "famix_druk_rezerwacji_v3";
 
   // -------------------------------------------------------------------------
   // Pomocnicze
@@ -72,7 +71,6 @@
     const n = parseFloat(String(v).replace(",", ".").replace(/\s/g, ""));
     return Number.isFinite(n) ? n : null;
   }
-  // Rabat/VAT wpisywane jako procent (np. 5 = 5%). Wartości < 1 traktujemy jako już-ułamek.
   function parsePct(v) {
     const n = parseNum(v);
     if (n === null) return null;
@@ -99,7 +97,7 @@
   function escapeAttr(s) { return escapeHtml(s); }
 
   // -------------------------------------------------------------------------
-  // Ładowanie bazy z ./data/SC.xlsx
+  // Baza
   // -------------------------------------------------------------------------
   async function loadDatabase() {
     setStatus("Ładowanie bazy…", "muted");
@@ -123,7 +121,7 @@
     } catch (err) {
       console.error(err);
       setStatus("Błąd ładowania bazy (./data/SC.xlsx)", "err");
-      showToast("Nie udało się załadować ./data/SC.xlsx — sprawdź, czy plik jest w repo.");
+      showToast("Nie udało się załadować ./data/SC.xlsx");
     }
   }
 
@@ -136,12 +134,12 @@
         znacznik: String(r.znacznik).trim(),
         kod: r.kod ?? "",
         jm: r.jm ?? "",
-        vat: r.vat ?? "",                       // 5, 8 lub 23
-        cena_famix: r.cena_s ?? null,           // <-- Cena FAMIX z kolumny cena_s
-        cena_z: r.cena_z ?? null,               // cena zakupu (podgląd, niewyświetlana)
-        cena_wyl: r.cena_wyliczona ?? null,     // cena wyliczona (podgląd)
-        stale: r.stale ?? null,                 // w nowym pliku brak – wpisywane ręcznie
-        refundacje: r.refundacje ?? null,       // j/w
+        vat: r.vat ?? "",                    // 5, 8, 23
+        cena_famix: r.cena_s ?? null,        // Cena FAMIX z kolumny cena_s
+        cena_z: r.cena_z ?? null,
+        cena_wyl: r.cena_wyliczona ?? null,
+        stale: r.stale ?? null,              // brak w nowym pliku – pole ręczne
+        refundacje: r.refundacje ?? null,    // brak w nowym pliku – pole ręczne
         grupa: r.grupa ?? "",
         podgrupa: r.podgrupa ?? "",
       }));
@@ -203,24 +201,23 @@
       const v = parseNum(rawValue);
       if (v === null) delete slot[field]; else slot[field] = v;
     }
-
     if (Object.keys(slot).length === 0) delete STATE.current.overrides[id];
     persistState();
   }
 
   // -------------------------------------------------------------------------
-  // Renderowanie listy produktów
+  // PICKER — lewa lista
   // -------------------------------------------------------------------------
-  function renderProducts() {
-    const body = $("#productRows");
+  function renderPicker() {
+    const body = $("#pickerRows");
     const producer = STATE.current.producer;
     const search = STATE.current.search.trim().toLowerCase();
 
     if (!producer || !STATE.producerIndex.has(producer)) {
-      $("#contentTitle").textContent = "Produkty";
-      $("#contentSub").textContent = "Wybierz producenta, aby zobaczyć dostępne indeksy.";
+      $("#pickerTitle").textContent = "Dostępne indeksy";
+      $("#pickerSub").textContent = "Wybierz producenta, aby zobaczyć indeksy.";
       body.innerHTML = `<div class="empty"><div class="empty-ic">📦</div><p>Wybierz producenta z listy po lewej.</p></div>`;
-      updateSummary();
+      updatePickerFooter(0, 0);
       return;
     }
 
@@ -234,30 +231,100 @@
       })
       .sort((a, b) => a.nazwa.localeCompare(b.nazwa, "pl"));
 
-    $("#contentTitle").textContent = `Produkty producenta: ${producer}`;
-    $("#contentSub").textContent = `${rows.length} pozycji widocznych · ${ids.length} w bazie · kliknij komórkę, aby nadpisać wartość`;
+    $("#pickerTitle").textContent = `Producent: ${producer}`;
+    $("#pickerSub").textContent = `${rows.length} pozycji · ${ids.length} w bazie`;
 
     if (rows.length === 0) {
       body.innerHTML = `<div class="empty"><div class="empty-ic">🔍</div><p>Brak pozycji pasujących do filtra.</p></div>`;
-      updateSummary();
+      updatePickerFooter(0, 0);
       return;
     }
 
     const frag = document.createDocumentFragment();
+    let addable = 0;
+    let checked = 0;
     rows.forEach((r) => {
-      const m = getMerged(r);
       const id = String(r.towar_id);
-      const selected = STATE.current.selectedIds.has(id);
+      const isAdded = STATE.current.selectedIds.has(id);
+      const isChecked = STATE.pickerChecked.has(id);
+      if (!isAdded) addable++;
+      if (isChecked) checked++;
+
+      const row = document.createElement("div");
+      row.className = "pick-row" + (isAdded ? " added" : (isChecked ? " picked" : ""));
+      row.dataset.id = id;
+
+      const vatDisplay = r.vat != null && r.vat !== "" ? String(r.vat) + "%" : "—";
+      const checkboxHTML = isAdded
+        ? `<span class="chip chip-added" title="Już w druku">✓</span>`
+        : `<input type="checkbox" ${isChecked ? "checked" : ""} aria-label="Zaznacz do dodania" />`;
+
+      row.innerHTML = `
+        <div class="c-chk">${checkboxHTML}</div>
+        <div class="c-id">${escapeHtml(id)}</div>
+        <div class="c-name" title="${escapeAttr(r.nazwa)}">${escapeHtml(r.nazwa)}</div>
+        <div class="c-num">${r.cena_famix != null ? fmtNum(r.cena_famix, 2) : "—"}</div>
+        <div class="c-num">${escapeHtml(vatDisplay)}</div>
+      `;
+      frag.appendChild(row);
+    });
+    body.innerHTML = "";
+    body.appendChild(frag);
+
+    // Checkbox "zaznacz wszystkie widoczne"
+    const addableVisible = rows.filter((r) => !STATE.current.selectedIds.has(String(r.towar_id)));
+    const allChecked = addableVisible.length > 0 &&
+      addableVisible.every((r) => STATE.pickerChecked.has(String(r.towar_id)));
+    const someChecked = addableVisible.some((r) => STATE.pickerChecked.has(String(r.towar_id)));
+    const cball = $("#pickCheckAll");
+    cball.checked = allChecked;
+    cball.indeterminate = !allChecked && someChecked;
+    cball.disabled = addableVisible.length === 0;
+
+    updatePickerFooter(checked, addable);
+  }
+
+  function updatePickerFooter(checked, addable) {
+    $("#pickerFooterInfo").textContent = addable > 0
+      ? `${checked} / ${addable} zaznaczonych`
+      : STATE.current.producer ? "Wszystkie pozycje już dodane" : "—";
+    $("#btnAddSelected").disabled = checked === 0;
+  }
+
+  // -------------------------------------------------------------------------
+  // EDITOR — prawa lista z edytowalnymi polami
+  // -------------------------------------------------------------------------
+  function renderEditor() {
+    const body = $("#editorRows");
+    const producer = STATE.current.producer;
+    const selectedIds = STATE.current.selectedIds;
+
+    if (!producer || selectedIds.size === 0) {
+      body.innerHTML = `<div class="empty"><div class="empty-ic">📋</div><p>Brak pozycji. Zaznacz indeksy w lewym panelu i kliknij <strong>"Dodaj zaznaczone"</strong>.</p></div>`;
+      $("#editorSub").textContent = "Dodaj pozycje z lewej strony, a potem uzupełnij wartości promocyjne.";
+      updateSummary();
+      return;
+    }
+
+    const rows = STATE.rows
+      .filter((r) => r.znacznik === producer && selectedIds.has(String(r.towar_id)))
+      .sort((a, b) => a.nazwa.localeCompare(b.nazwa, "pl"));
+
+    $("#editorSub").textContent = `${rows.length} pozycji — edytuj komórki, aby uzupełnić wartości promocyjne.`;
+
+    const frag = document.createDocumentFragment();
+    rows.forEach((r) => {
+      const id = String(r.towar_id);
+      const m = getMerged(r);
       const afterStale =
         m.cena_famix != null && m.stale != null
           ? (+m.cena_famix) * (1 - (+m.stale))
           : null;
 
       const row = document.createElement("div");
-      row.className = "row" + (selected ? " selected" : "");
+      row.className = "edit-row";
       row.dataset.id = id;
       row.innerHTML = `
-        <div class="c-chk"><input type="checkbox" ${selected ? "checked" : ""} aria-label="Wybierz" /></div>
         <div class="c-id">${escapeHtml(id)}</div>
         <div class="c-name" title="${escapeAttr(r.nazwa)}">${escapeHtml(r.nazwa)}</div>
 
@@ -282,7 +349,7 @@
                  placeholder="0,00" title="Rabat stały %" />
         </div>
 
-        <div class="c-num c-computed" data-computed="po_rab" title="Cena po rabacie stałym">${afterStale != null ? fmtNum(afterStale, 2) : "—"}</div>
+        <div class="c-computed" data-computed="po_rab" title="Cena po rabacie stałym">${afterStale != null ? fmtNum(afterStale, 2) : "—"}</div>
 
         <div class="c-cell">
           <input class="cell-input num" data-id="${escapeAttr(id)}" data-field="rabat_prom"
@@ -302,7 +369,7 @@
           <input class="cell-input num" data-id="${escapeAttr(id)}" data-field="refundacja"
                  type="text" inputmode="decimal"
                  value="${m.refundacja != null ? fmtNum(m.refundacja, 2) : ""}"
-                 placeholder="0,00" title="Refundacja odsprzedaży (zł)" />
+                 placeholder="0,00" title="Refundacja producenta (zł)" />
         </div>
 
         <div class="c-cell">
@@ -310,34 +377,21 @@
                  type="text" value="${escapeAttr(m.uwagi || "")}"
                  placeholder="—" title="Uwagi" />
         </div>
+
+        <div class="c-chk">
+          <button class="btn btn-icon" data-remove="${escapeAttr(id)}" title="Usuń z druku" aria-label="Usuń">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </button>
+        </div>
       `;
       frag.appendChild(row);
     });
     body.innerHTML = "";
     body.appendChild(frag);
-
-    // Nagłówkowy checkbox
-    const visibleIds = rows.map((r) => String(r.towar_id));
-    const allChecked = visibleIds.length > 0 && visibleIds.every((id) => STATE.current.selectedIds.has(id));
-    const someChecked = visibleIds.some((id) => STATE.current.selectedIds.has(id));
-    const thCheck = $("#thCheck");
-    thCheck.checked = allChecked;
-    thCheck.indeterminate = !allChecked && someChecked;
-
     updateSummary();
   }
 
-  function updateSummary() {
-    const totalForProducer = STATE.current.producer
-      ? (STATE.producerIndex.get(STATE.current.producer)?.length ?? 0)
-      : 0;
-    $("#sumSelected").textContent = `${STATE.current.selectedIds.size} / ${totalForProducer}`;
-    $("#sumModule").textContent = STATE.current.module || "—";
-    const fee = parseFloat(STATE.current.fee);
-    $("#sumFee").textContent = Number.isFinite(fee) ? fmtMoney(fee) : "0,00 zł";
-  }
-
-  function recomputeRow(rowEl) {
+  function recomputeEditorRow(rowEl) {
     const id = rowEl.dataset.id;
     const base = STATE.rows.find((r) => String(r.towar_id) === id);
     if (!base) return;
@@ -350,10 +404,18 @@
     if (cell) cell.textContent = afterStale != null ? fmtNum(afterStale, 2) : "—";
   }
 
+  function updateSummary() {
+    $("#sumSelected").textContent = String(STATE.current.selectedIds.size);
+    $("#sumModule").textContent = STATE.current.module || "—";
+    const fee = parseFloat(STATE.current.fee);
+    $("#sumFee").textContent = Number.isFinite(fee) ? fmtMoney(fee) : "0,00 zł";
+  }
+
   // -------------------------------------------------------------------------
   // Zdarzenia
   // -------------------------------------------------------------------------
   function bindEvents() {
+    // Producent
     const producerInput = $("#producerSearch");
     producerInput.addEventListener("change", () => {
       const v = producerInput.value.trim();
@@ -370,6 +432,7 @@
       if (STATE.producers.includes(v)) setProducer(v);
     });
 
+    // Moduł
     $("#moduleGroup").addEventListener("click", (e) => {
       const btn = e.target.closest(".seg");
       if (!btn) return;
@@ -380,6 +443,7 @@
       persistState();
     });
 
+    // Pola formularza w sidebarze
     const bindVal = (sel, field) => {
       $(sel).addEventListener("input", (e) => {
         STATE.current[field] = e.target.value;
@@ -394,66 +458,95 @@
     bindVal("#dateTo", "dateTo");
     bindVal("#dateDoc", "dateDoc");
 
+    // Filtr w pickerze
     $("#productSearch").addEventListener("input", (e) => {
       STATE.current.search = e.target.value;
-      renderProducts();
+      renderPicker();
     });
 
-    const body = $("#productRows");
+    // === PICKER ===
+    const picker = $("#pickerRows");
 
-    // Checkbox wyboru
-    body.addEventListener("change", (e) => {
+    picker.addEventListener("change", (e) => {
       if (e.target.matches('.c-chk input[type="checkbox"]')) {
-        const row = e.target.closest(".row");
+        const row = e.target.closest(".pick-row");
+        if (!row) return;
         const id = row.dataset.id;
-        if (e.target.checked) STATE.current.selectedIds.add(id);
-        else STATE.current.selectedIds.delete(id);
-        row.classList.toggle("selected", e.target.checked);
-        updateHeaderCheckbox();
-        updateSummary();
-        persistState();
+        if (e.target.checked) STATE.pickerChecked.add(id);
+        else STATE.pickerChecked.delete(id);
+        row.classList.toggle("picked", e.target.checked);
+        syncPickerFooter();
       }
     });
 
-    // Edycja komórki
-    body.addEventListener("input", (e) => {
+    picker.addEventListener("click", (e) => {
+      if (e.target.closest("input")) return;
+      const row = e.target.closest(".pick-row");
+      if (!row || row.classList.contains("added")) return;
+      const id = row.dataset.id;
+      const cb = row.querySelector('input[type="checkbox"]');
+      if (!cb) return;
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    $("#pickCheckAll").addEventListener("change", (e) => {
+      const rows = $$("#pickerRows .pick-row").filter((r) => !r.classList.contains("added"));
+      rows.forEach((r) => {
+        const id = r.dataset.id;
+        const cb = r.querySelector('input[type="checkbox"]');
+        if (!cb) return;
+        cb.checked = e.target.checked;
+        r.classList.toggle("picked", e.target.checked);
+        if (e.target.checked) STATE.pickerChecked.add(id);
+        else STATE.pickerChecked.delete(id);
+      });
+      syncPickerFooter();
+    });
+
+    // Dodaj zaznaczone → editor
+    $("#btnAddSelected").addEventListener("click", () => {
+      if (STATE.pickerChecked.size === 0) return;
+      const added = STATE.pickerChecked.size;
+      STATE.pickerChecked.forEach((id) => STATE.current.selectedIds.add(id));
+      STATE.pickerChecked.clear();
+      renderPicker();
+      renderEditor();
+      persistState();
+      showToast(`Dodano ${added} ${added === 1 ? "pozycję" : (added < 5 ? "pozycje" : "pozycji")}`);
+    });
+
+    // === EDITOR ===
+    const editor = $("#editorRows");
+
+    editor.addEventListener("input", (e) => {
       const inp = e.target.closest(".cell-input");
       if (!inp) return;
       const id = inp.dataset.id;
       const field = inp.dataset.field;
       setOverride(id, field, inp.value);
-      const rowEl = inp.closest(".row");
-      if (field === "cena_famix" || field === "stale") recomputeRow(rowEl);
+      const rowEl = inp.closest(".edit-row");
+      if (field === "cena_famix" || field === "stale") recomputeEditorRow(rowEl);
     });
 
-    $("#thCheck").addEventListener("change", (e) => {
-      const rows = $$("#productRows .row");
-      rows.forEach((r) => {
-        const id = r.dataset.id;
-        const cb = r.querySelector('.c-chk input[type="checkbox"]');
-        cb.checked = e.target.checked;
-        r.classList.toggle("selected", e.target.checked);
-        if (e.target.checked) STATE.current.selectedIds.add(id);
-        else STATE.current.selectedIds.delete(id);
-      });
-      updateSummary();
+    editor.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-remove]");
+      if (!btn) return;
+      const id = btn.dataset.remove;
+      STATE.current.selectedIds.delete(id);
+      delete STATE.current.overrides[id];
+      renderEditor();
+      renderPicker();
       persistState();
     });
 
-    $("#btnSelectAll").addEventListener("click", () => {
-      const rows = $$("#productRows .row");
-      rows.forEach((r) => {
-        STATE.current.selectedIds.add(r.dataset.id);
-        r.classList.add("selected");
-        r.querySelector('.c-chk input[type="checkbox"]').checked = true;
-      });
-      updateHeaderCheckbox();
-      updateSummary();
-      persistState();
-    });
-    $("#btnClear").addEventListener("click", () => {
+    $("#btnClearAll").addEventListener("click", () => {
+      if (STATE.current.selectedIds.size === 0) return;
+      if (!confirm("Usunąć wszystkie pozycje z druku?")) return;
       STATE.current.selectedIds.clear();
-      renderProducts();
+      STATE.current.overrides = {};
+      renderEditor();
+      renderPicker();
       persistState();
     });
 
@@ -471,14 +564,31 @@
     });
   }
 
+  function syncPickerFooter() {
+    const checked = STATE.pickerChecked.size;
+    const rows = $$("#pickerRows .pick-row").filter((r) => !r.classList.contains("added"));
+    updatePickerFooter(checked, rows.length);
+
+    const all = rows.length > 0 &&
+      rows.every((r) => STATE.pickerChecked.has(r.dataset.id));
+    const some = rows.some((r) => STATE.pickerChecked.has(r.dataset.id));
+    const cball = $("#pickCheckAll");
+    cball.checked = all;
+    cball.indeterminate = !all && some;
+  }
+
   function setProducer(name) {
+    if (STATE.current.producer === name) return;
     STATE.current.producer = name;
     STATE.current.selectedIds.clear();
+    STATE.current.overrides = {};
+    STATE.pickerChecked.clear();
     $("#producerSearch").value = name;
     $("#producerHint").textContent = name
       ? `${STATE.producerIndex.get(name)?.length ?? 0} indeksów w bazie`
       : "—";
-    renderProducts();
+    renderPicker();
+    renderEditor();
     persistState();
   }
 
@@ -486,15 +596,6 @@
     $$("#moduleGroup .seg").forEach((b) => {
       b.setAttribute("aria-checked", String(b.dataset.val === STATE.current.module));
     });
-  }
-
-  function updateHeaderCheckbox() {
-    const ids = $$("#productRows .row").map((r) => r.dataset.id);
-    const allChecked = ids.length > 0 && ids.every((id) => STATE.current.selectedIds.has(id));
-    const some = ids.some((id) => STATE.current.selectedIds.has(id));
-    const th = $("#thCheck");
-    th.checked = allChecked;
-    th.indeterminate = !allChecked && some;
   }
 
   // -------------------------------------------------------------------------
@@ -517,6 +618,8 @@
         $("#newsletter").value = STATE.current.newsletter;
         $("#dateDoc").value = STATE.current.dateDoc;
         updateSummary();
+        renderPicker();
+        renderEditor();
         return;
       }
       const data = JSON.parse(raw);
@@ -534,7 +637,8 @@
         $("#producerHint").textContent = `${STATE.producerIndex.get(data.producer)?.length ?? 0} indeksów w bazie`;
       }
       updateModuleUI();
-      renderProducts();
+      renderPicker();
+      renderEditor();
       updateSummary();
     } catch (e) { /* ignore */ }
   }
@@ -544,10 +648,8 @@
   // -------------------------------------------------------------------------
   function selectedProducts() {
     if (!STATE.current.producer) return [];
-    const ids = STATE.producerIndex.get(STATE.current.producer) ?? [];
-    return ids
-      .map((i) => STATE.rows[i])
-      .filter((r) => STATE.current.selectedIds.has(String(r.towar_id)))
+    return STATE.rows
+      .filter((r) => r.znacznik === STATE.current.producer && STATE.current.selectedIds.has(String(r.towar_id)))
       .map(getMerged)
       .sort((a, b) => a.nazwa.localeCompare(b.nazwa, "pl"));
   }
@@ -555,7 +657,7 @@
   function openPreview() {
     if (!STATE.current.producer) { showToast("Najpierw wybierz producenta."); return; }
     const prods = selectedProducts();
-    if (prods.length === 0) { showToast("Nie zaznaczono żadnego produktu."); return; }
+    if (prods.length === 0) { showToast("Brak pozycji w druku."); return; }
     $("#previewSheet").innerHTML = buildSheetHTML(prods);
     $("#previewChip").textContent = `${STATE.current.producer} · ${prods.length} poz. · ${STATE.current.module || "—"}`;
     $("#previewOverlay").hidden = false;
@@ -620,7 +722,7 @@
           <div class="sheet-title">
             <div class="conf">POTWIERDZENIE UDZIAŁU W PROMOCJI:</div>
             <div class="nl">${escapeHtml(c.newsletter || "Gazetka")}</div>
-            <div class="dates">Zaznaczone pozycje: ${products.length}</div>
+            <div class="dates">Pozycje w druku: ${products.length}</div>
           </div>
           <div class="sheet-date">
             <div>Rzeszów, dnia:</div>
@@ -681,7 +783,7 @@
   function exportXLSX() {
     if (!STATE.current.producer) { showToast("Najpierw wybierz producenta."); return; }
     const prods = selectedProducts();
-    if (prods.length === 0) { showToast("Nie zaznaczono produktów."); return; }
+    if (prods.length === 0) { showToast("Brak pozycji w druku."); return; }
 
     const c = STATE.current;
     const wb = XLSX.utils.book_new();

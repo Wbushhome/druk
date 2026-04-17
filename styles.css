@@ -1,6 +1,6 @@
 /* ==========================================================================
-   Druk rezerwacji · Gazetka FAMIX (v2)
-   UI w stylu macOS — traffic lights, glass, SF Blue, edytowalne komórki
+   Druk rezerwacji · Gazetka FAMIX (v3)
+   Układ shuttle: Params | Picker | Editor
    ========================================================================== */
 
 :root {
@@ -75,7 +75,7 @@ html, body {
 button, input, select, textarea { font: inherit; color: inherit; }
 
 /* =========================================================================
-   Szkielet — full viewport, bez scrolla strony
+   Szkielet
    ========================================================================= */
 .app {
   height: 100vh;
@@ -84,7 +84,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   overflow: hidden;
 }
 
-/* --------- Pasek okna --------- */
+/* --------- Titlebar --------- */
 .titlebar {
   display: grid;
   grid-template-columns: 80px 1fr auto;
@@ -122,7 +122,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .app-title { font-size: 13px; }
 .titlebar-actions { display: flex; gap: 8px; }
 
-/* --------- Przyciski --------- */
+/* --------- Buttons --------- */
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 7px 12px;
@@ -135,8 +135,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   cursor: pointer;
   transition: background 120ms ease, transform 80ms ease, box-shadow 120ms ease;
 }
-.btn:hover { background: var(--fill); }
-.btn:active { transform: scale(0.98); }
+.btn:hover:not(:disabled) { background: var(--fill); }
+.btn:active:not(:disabled) { transform: scale(0.98); }
 .btn:focus-visible {
   outline: 0;
   box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35);
@@ -149,7 +149,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-color: transparent;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
-.btn-primary:hover { background: var(--sys-blue-hover); }
+.btn-primary:hover:not(:disabled) { background: var(--sys-blue-hover); }
 
 .btn-secondary {
   background: var(--panel-solid);
@@ -160,8 +160,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-color: transparent;
   color: var(--label-2);
 }
-.btn-ghost:hover { background: var(--fill); }
+.btn-ghost:hover:not(:disabled) { background: var(--fill); }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+.btn-icon {
+  padding: 5px;
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  color: var(--label-3);
+  background: transparent;
+  border-color: transparent;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.btn-icon:hover:not(:disabled) {
+  background: rgba(255, 69, 58, 0.12);
+  color: var(--sys-red);
+}
 
 /* chipy */
 .chip {
@@ -177,15 +191,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .chip-muted { background: var(--fill-2); color: var(--label-3); }
 .chip-ok { background: rgba(48, 209, 88, 0.16); color: #1e7e32; }
 .chip-err { background: rgba(255, 69, 58, 0.16); color: #c1272d; }
+.chip-added { background: rgba(48, 209, 88, 0.18); color: #1e7e32; font-size: 10.5px; padding: 2px 7px; }
 
 /* =========================================================================
-   Workspace
+   Workspace — 3 kolumny
    ========================================================================= */
 .workspace {
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 14px;
-  padding: 14px;
+  grid-template-columns: 260px minmax(360px, 1fr) minmax(680px, 1.75fr);
+  gap: 12px;
+  padding: 12px;
   min-height: 0;
   overflow: hidden;
 }
@@ -197,7 +212,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   border: 1px solid var(--separator);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: 14px;
   box-shadow: var(--shadow-md);
 }
 .panel-title {
@@ -206,19 +221,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--label-3);
-  margin: 0 0 14px;
+  margin: 0 0 12px;
 }
 
-.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
 .field:last-child { margin-bottom: 0; }
 .field-label { font-size: 12px; font-weight: 500; color: var(--label-2); }
 .field-hint { font-size: 11px; color: var(--label-4); }
-.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
 .two-col .field { margin-bottom: 0; }
 
 .input {
   width: 100%;
-  height: 32px;
+  height: 30px;
   padding: 0 10px;
   border-radius: 8px;
   border: 1px solid var(--separator-strong);
@@ -248,7 +263,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .seg {
   appearance: none; border: 0; background: transparent;
-  padding: 6px 4px;
+  padding: 5px 2px;
   border-radius: 7px;
   cursor: pointer;
   font-size: 12px;
@@ -263,10 +278,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .seg:hover { color: var(--label); }
 
-.summary { padding: 12px 16px; }
+.summary { padding: 10px 14px; }
 .sum-row {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 0;
+  padding: 5px 0;
   font-size: 12.5px;
   color: var(--label-2);
 }
@@ -274,7 +289,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sum-row + .sum-row { border-top: 1px solid var(--separator); }
 
 /* =========================================================================
-   Content — lista produktów
+   Content panels (picker + editor)
    ========================================================================= */
 .content {
   background: var(--panel);
@@ -283,68 +298,77 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--separator);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
   min-height: 0;
   overflow: hidden;
 }
 .content-header {
-  padding: 12px 16px;
+  padding: 10px 14px;
   display: flex; align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   border-bottom: 1px solid var(--separator);
 }
-.content-heading h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-.content-sub { margin: 3px 0 0; font-size: 12px; color: var(--label-3); }
+.content-heading h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.content-sub { margin: 2px 0 0; font-size: 11.5px; color: var(--label-3); }
 
-.content-tools { display: flex; gap: 8px; align-items: center; }
+.content-tools { display: flex; gap: 6px; align-items: center; }
 .search-wrap { position: relative; display: flex; align-items: center; }
 .search-ic { position: absolute; left: 9px; color: var(--label-4); pointer-events: none; }
 .input-search {
   padding-left: 28px;
-  width: 220px;
-  height: 30px;
+  width: 180px;
+  height: 28px;
   background: var(--fill-2);
   border-color: transparent;
+  font-size: 12.5px;
 }
 .input-search:focus { background: var(--panel-solid); border-color: var(--sys-blue); }
 
-/* --------- Tabela z edytowalnymi komórkami --------- */
+.panel-footer {
+  padding: 8px 12px;
+  border-top: 1px solid var(--separator);
+  background: var(--fill-2);
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 10px;
+}
+.footer-info { font-size: 12px; color: var(--label-3); }
+
+/* =========================================================================
+   PICKER — lista wyboru
+   ========================================================================= */
 .table-wrap {
-  flex: 1;
-  min-height: 0;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   overflow: hidden;
 }
-
-/*
-  Kolejność kolumn:
-  [☐] [Indeks] [Nazwa] [Cena FAMIX] [VAT] [Rab. stały] [Po rab.]
-  [Rab. prom] [Promocja netto] [Refund.] [Uwagi]
-*/
-.table-head,
-.table-body > .row {
+.pick-head, .pick-body > .pick-row {
   display: grid;
-  grid-template-columns:
-    36px     /* chk */
-    70px     /* indeks */
-    minmax(180px, 1.6fr)  /* nazwa */
-    92px     /* Cena FAMIX */
-    62px     /* VAT */
-    88px     /* Rab. stały */
-    82px     /* Po rab. */
-    88px     /* Rab. prom */
-    100px    /* Promocja netto */
-    88px     /* Refund. */
-    minmax(140px, 1fr);   /* Uwagi */
+  grid-template-columns: 36px 70px minmax(140px, 1fr) 82px 52px;
   align-items: stretch;
 }
-.table-head {
+.edit-head, .edit-body > .edit-row {
+  display: grid;
+  grid-template-columns:
+    64px                  /* Indeks */
+    minmax(150px, 1.3fr)  /* Nazwa */
+    82px                  /* Cena FAMIX */
+    56px                  /* VAT */
+    82px                  /* Rab. stały */
+    78px                  /* Po rab. */
+    82px                  /* Rab. prom */
+    96px                  /* Promocja netto */
+    82px                  /* Refund. */
+    minmax(110px, 1fr)    /* Uwagi */
+    32px;                 /* Usuń */
+  align-items: stretch;
+}
+.pick-head, .edit-head {
   background: var(--fill-2);
   border-bottom: 1px solid var(--separator);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -352,71 +376,97 @@ button, input, select, textarea { font: inherit; color: inherit; }
   position: sticky; top: 0; z-index: 2;
 }
 .th {
-  padding: 8px 10px;
+  padding: 7px 8px;
   white-space: nowrap;
   display: flex;
   align-items: center;
 }
-.th-chk { justify-content: center; }
+.th-chk { justify-content: center; padding: 0; }
 .th-num { justify-content: flex-end; }
 .th-text { justify-content: flex-start; }
+.th-act { justify-content: center; }
 
 .table-body {
   overflow: auto;
   min-height: 0;
   scrollbar-gutter: stable;
 }
-.row {
+
+/* Wiersze pickera */
+.pick-row {
   padding: 0;
   border-bottom: 1px solid var(--separator);
-  cursor: default;
+  cursor: pointer;
   transition: background 80ms ease;
 }
-.row:hover { background: var(--fill-2); }
-.row.selected { background: rgba(10, 132, 255, 0.07); }
-.row.selected:hover { background: rgba(10, 132, 255, 0.12); }
-
-.row > div {
+.pick-row:hover { background: var(--fill-2); }
+.pick-row.picked { background: rgba(10, 132, 255, 0.08); }
+.pick-row.added { background: rgba(48, 209, 88, 0.06); cursor: default; }
+.pick-row.added .c-name { color: var(--label-3); }
+.pick-row > div {
   display: flex;
   align-items: center;
-  min-height: 34px;
-  padding: 0 6px;
+  min-height: 32px;
+  padding: 0 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 12.5px;
 }
-.row .c-chk { justify-content: center; padding: 0; }
-.row .c-id {
+.pick-row .c-chk { justify-content: center; padding: 0; }
+.pick-row .c-id { color: var(--label-2); font-variant-numeric: tabular-nums; padding-left: 8px; }
+.pick-row .c-name { color: var(--label); font-weight: 500; }
+.pick-row .c-num { justify-content: flex-end; font-variant-numeric: tabular-nums; padding-right: 8px; }
+
+/* =========================================================================
+   EDITOR — wiersze edycji
+   ========================================================================= */
+.edit-row {
+  padding: 0;
+  border-bottom: 1px solid var(--separator);
+  animation: slide-in 220ms ease-out;
+}
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.edit-row > div {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 4px;
+}
+.edit-row .c-id {
   color: var(--label-2);
   font-variant-numeric: tabular-nums;
   justify-content: flex-start;
-  padding-left: 10px;
+  padding-left: 8px;
+  font-size: 12px;
 }
-.row .c-name {
+.edit-row .c-name {
   color: var(--label);
   font-weight: 500;
-  display: block;
-  padding: 8px 10px;
-  line-height: 1.25;
+  font-size: 12.5px;
+  padding: 0 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: block;
+  line-height: 1.3;
+  align-content: center;
 }
-.row .c-num {
-  justify-content: flex-end;
+.edit-row .c-computed {
+  color: var(--label-2);
   font-variant-numeric: tabular-nums;
-  padding-right: 10px;
-}
-.row .c-computed {
-  color: var(--label-3);
+  justify-content: flex-end;
+  padding-right: 8px;
+  font-size: 12px;
   font-style: italic;
 }
-.row.selected .c-computed { color: var(--label-2); font-style: normal; }
 
-/* Edytowalne komórki */
+/* Komórki edytowalne */
 .c-cell {
-  padding: 2px 2px;
+  padding: 2px;
   display: flex;
   align-items: stretch;
 }
@@ -427,7 +477,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border: 1px solid transparent;
   background: transparent;
   border-radius: 6px;
-  padding: 0 8px;
+  padding: 0 7px;
   font-size: 12.5px;
   color: var(--label);
   font-variant-numeric: tabular-nums;
@@ -446,16 +496,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-color: var(--sys-blue);
   box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.22);
 }
-.row.selected .cell-input:not(:hover):not(:focus) {
-  background: rgba(255, 255, 255, 0.25);
-}
-@media (prefers-color-scheme: dark) {
-  .row.selected .cell-input:not(:hover):not(:focus) {
-    background: rgba(255, 255, 255, 0.04);
-  }
-}
 
-/* Custom checkbox */
+/* Checkboxy */
 input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
@@ -483,13 +525,17 @@ input[type="checkbox"]:focus-visible {
   outline: 0;
   box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.35);
 }
+input[type="checkbox"]:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
 
-.empty { padding: 48px 16px; text-align: center; color: var(--label-3); }
-.empty-ic { font-size: 36px; margin-bottom: 8px; opacity: 0.8; }
-.empty p { margin: 0; font-size: 13px; }
+.empty { padding: 40px 16px; text-align: center; color: var(--label-3); }
+.empty-ic { font-size: 32px; margin-bottom: 8px; opacity: 0.8; }
+.empty p { margin: 0; font-size: 12.5px; line-height: 1.5; }
 
 /* =========================================================================
-   Overlay (podgląd wydruku)
+   Overlay (podgląd)
    ========================================================================= */
 .overlay {
   position: fixed;
@@ -623,24 +669,36 @@ input[type="checkbox"]:focus-visible {
 .toast[hidden] { display: none; }
 
 /* =========================================================================
-   Responsywność — poniżej 1280px tabela skrolluje horyzontalnie,
-   żeby nie okrajać kolumn edytowalnych
+   Responsywność
    ========================================================================= */
 @media (max-width: 1400px) {
-  .workspace { grid-template-columns: 270px 1fr; gap: 12px; padding: 12px; }
-  .input-search { width: 180px; }
+  .workspace {
+    grid-template-columns: 240px minmax(320px, 1fr) minmax(620px, 1.6fr);
+    gap: 10px; padding: 10px;
+  }
+  .input-search { width: 150px; }
 }
 @media (max-width: 1200px) {
+  .workspace { grid-template-columns: 220px 1fr; grid-template-rows: 1fr 1fr; }
+  .content.picker { grid-column: 2 / 3; grid-row: 1; }
+  .content.editor { grid-column: 2 / 3; grid-row: 2; }
+  .sidebar { grid-column: 1; grid-row: 1 / 3; }
   .table-wrap { overflow-x: auto; }
-  .table-head, .table-body > .row { min-width: 1080px; }
+  .edit-head, .edit-body > .edit-row { min-width: 1020px; }
 }
 @media (max-width: 820px) {
-  .workspace { grid-template-columns: 1fr; gap: 10px; padding: 10px; }
-  .sidebar { max-height: 42vh; overflow: auto; }
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr 1fr;
+    gap: 8px; padding: 8px;
+  }
+  .sidebar { grid-column: 1; grid-row: 1; max-height: 32vh; overflow: auto; }
+  .content.picker { grid-column: 1; grid-row: 2; }
+  .content.editor { grid-column: 1; grid-row: 3; }
   .titlebar { grid-template-columns: auto 1fr; }
   .traffic { display: none; }
   .app-title { font-size: 12px; }
-  .input-search { width: 140px; }
+  .input-search { width: 120px; }
 }
 
 /* =========================================================================
@@ -655,11 +713,6 @@ input[type="checkbox"]:focus-visible {
   .overlay[hidden] { display: block !important; }
   .overlay-dialog { box-shadow: none; height: auto; border-radius: 0; display: block; }
   .sheet-scroll { overflow: visible; background: #fff; padding: 0; }
-  .sheet {
-    width: 100%;
-    box-shadow: none;
-    border-radius: 0;
-    padding: 10mm;
-  }
+  .sheet { width: 100%; box-shadow: none; border-radius: 0; padding: 10mm; }
   @page { size: A4 landscape; margin: 8mm; }
 }

@@ -53,7 +53,7 @@
         </div>
       </header>
 
-      <!-- Główna siatka: panel boczny + lista produktów -->
+      <!-- Główna siatka: params | picker | editor -->
       <main class="workspace">
         <!-- Panel boczny z parametrami druku -->
         <aside class="sidebar">
@@ -114,8 +114,8 @@
 
           <section class="panel summary">
             <div class="sum-row">
-              <span>Wybrane pozycje</span>
-              <strong id="sumSelected">0 / 0</strong>
+              <span>W druku</span>
+              <strong id="sumSelected">0</strong>
             </div>
             <div class="sum-row">
               <span>Moduł</span>
@@ -128,26 +128,60 @@
           </section>
         </aside>
 
-        <!-- Obszar listy produktów -->
-        <section class="content">
+        <!-- PICKER — lewy panel z dostępnymi indeksami -->
+        <section class="content picker">
           <div class="content-header">
             <div class="content-heading">
-              <h2 id="contentTitle">Produkty</h2>
-              <p id="contentSub" class="content-sub">Wybierz producenta, aby zobaczyć dostępne indeksy.</p>
+              <h2 id="pickerTitle">Dostępne indeksy</h2>
+              <p id="pickerSub" class="content-sub">Wybierz producenta, aby zobaczyć indeksy.</p>
             </div>
             <div class="content-tools">
               <div class="search-wrap">
                 <svg class="search-ic" width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-                <input id="productSearch" class="input input-search" type="search" placeholder="Filtruj po nazwie lub kodzie…" />
+                <input id="productSearch" class="input input-search" type="search" placeholder="Filtruj…" />
               </div>
-              <button id="btnSelectAll" class="btn btn-ghost btn-sm" type="button">Zaznacz widoczne</button>
-              <button id="btnClear" class="btn btn-ghost btn-sm" type="button">Wyczyść</button>
             </div>
           </div>
 
           <div class="table-wrap">
-            <div class="table-head" role="row">
-              <div class="th th-chk"><input id="thCheck" type="checkbox" aria-label="Zaznacz wszystkie" /></div>
+            <div class="pick-head" role="row">
+              <div class="th th-chk"><input id="pickCheckAll" type="checkbox" aria-label="Zaznacz wszystkie widoczne" /></div>
+              <div class="th th-id">Indeks</div>
+              <div class="th th-name">Nazwa</div>
+              <div class="th th-num">Cena</div>
+              <div class="th th-num">VAT</div>
+            </div>
+            <div id="pickerRows" class="table-body pick-body" role="rowgroup">
+              <div class="empty">
+                <div class="empty-ic">📦</div>
+                <p>Wybierz producenta z listy po lewej.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-footer">
+            <span id="pickerFooterInfo" class="footer-info">—</span>
+            <button id="btnAddSelected" class="btn btn-primary" type="button" disabled>
+              Dodaj zaznaczone
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-left:4px"><path d="M3 8h10m0 0L9 4m4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- EDITOR — prawy panel z pozycjami w druku -->
+        <section class="content editor">
+          <div class="content-header">
+            <div class="content-heading">
+              <h2>Pozycje w druku</h2>
+              <p id="editorSub" class="content-sub">Dodaj pozycje z lewej strony, a potem uzupełnij wartości promocyjne.</p>
+            </div>
+            <div class="content-tools">
+              <button id="btnClearAll" class="btn btn-ghost btn-sm" type="button">Wyczyść wszystko</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <div class="edit-head" role="row">
               <div class="th th-id">Indeks</div>
               <div class="th th-name">Nazwa</div>
               <div class="th th-num">Cena FAMIX</div>
@@ -156,13 +190,14 @@
               <div class="th th-num">Po rab.</div>
               <div class="th th-num">Rab. prom %</div>
               <div class="th th-num">Promocja netto</div>
-              <div class="th th-num">Refund. (zł)</div>
+              <div class="th th-num">Refund. zł</div>
               <div class="th th-text">Uwagi</div>
+              <div class="th th-act"></div>
             </div>
-            <div id="productRows" class="table-body" role="rowgroup">
+            <div id="editorRows" class="table-body edit-body" role="rowgroup">
               <div class="empty">
-                <div class="empty-ic">📦</div>
-                <p>Wybierz producenta z listy po lewej.</p>
+                <div class="empty-ic">📋</div>
+                <p>Brak pozycji. Zaznacz indeksy w lewym panelu i kliknij <strong>„Dodaj zaznaczone"</strong>.</p>
               </div>
             </div>
           </div>
