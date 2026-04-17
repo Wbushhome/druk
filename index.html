@@ -2,14 +2,190 @@
 <html lang="pl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Druk rezerwacji do gazetki</title>
-    <meta name="theme-color" content="#e9eef6" />
-    <link rel="manifest" href="./assets/manifest-DnB3rhjd.webmanifest" />
-    <script type="module" crossorigin src="./assets/index-B7ixa4YX.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-g4itbMjY.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Druk rezerwacji · Gazetka FAMIX</title>
+    <meta name="theme-color" content="#f5f5f7" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preload" as="fetch" href="./data/SC.xlsx" crossorigin="anonymous" />
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="app" class="app" aria-busy="true">
+      <!-- Pasek górny w stylu macOS -->
+      <header class="titlebar">
+        <div class="traffic">
+          <span class="tl tl-r" aria-hidden="true"></span>
+          <span class="tl tl-y" aria-hidden="true"></span>
+          <span class="tl tl-g" aria-hidden="true"></span>
+        </div>
+        <div class="titlebar-title">
+          <span class="brand-dot" aria-hidden="true"></span>
+          <span class="app-title">Druk rezerwacji · Gazetka FAMIX</span>
+          <span id="statusChip" class="chip chip-muted">Ładowanie bazy…</span>
+        </div>
+        <div class="titlebar-actions">
+          <button id="btnReload" class="btn btn-ghost" type="button" title="Przeładuj bazę">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 4.5A5.5 5.5 0 1 0 14.4 9.3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M14 2v3.5H10.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Odśwież</span>
+          </button>
+          <button id="btnPreview" class="btn btn-secondary" type="button">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M1 8s2.6-4.5 7-4.5S15 8 15 8s-2.6 4.5-7 4.5S1 8 1 8Z" stroke="currentColor" stroke-width="1.4"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.4"/></svg>
+            <span>Podgląd</span>
+          </button>
+          <button id="btnExport" class="btn btn-primary" type="button">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0 3-3m-3 3L5 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.5 12v1.5A1.5 1.5 0 0 0 4 15h8a1.5 1.5 0 0 0 1.5-1.5V12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span>Eksport XLSX</span>
+          </button>
+          <button id="btnPdf" class="btn btn-secondary" type="button">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 2h6l3 3v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.4"/><path d="M10 2v3h3" stroke="currentColor" stroke-width="1.4"/></svg>
+            <span>Drukuj / PDF</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Główna siatka: panel boczny + lista produktów -->
+      <main class="workspace">
+        <!-- Panel boczny z parametrami druku -->
+        <aside class="sidebar">
+          <section class="panel">
+            <h2 class="panel-title">Parametry rezerwacji</h2>
+
+            <label class="field">
+              <span class="field-label">Producent</span>
+              <div class="select-wrap">
+                <input id="producerSearch" class="input" type="search" list="producerList" placeholder="Wpisz lub wybierz…" autocomplete="off" />
+                <datalist id="producerList"></datalist>
+              </div>
+              <span id="producerHint" class="field-hint">—</span>
+            </label>
+
+            <div class="field">
+              <span class="field-label">Moduł</span>
+              <div id="moduleGroup" class="segmented" role="radiogroup" aria-label="Moduł">
+                <button type="button" class="seg" data-val="1/4" role="radio" aria-checked="false">¼ str.</button>
+                <button type="button" class="seg" data-val="1/2" role="radio" aria-checked="false">½ str.</button>
+                <button type="button" class="seg" data-val="3/4" role="radio" aria-checked="false">¾ str.</button>
+                <button type="button" class="seg" data-val="1" role="radio" aria-checked="false">1 str.</button>
+              </div>
+            </div>
+
+            <div class="two-col">
+              <label class="field">
+                <span class="field-label">Opłata (zł)</span>
+                <input id="fee" class="input" type="number" inputmode="decimal" min="0" step="1" placeholder="0" />
+              </label>
+              <label class="field">
+                <span class="field-label">Gazetka</span>
+                <input id="newsletter" class="input" type="text" placeholder="Gazetka Maj 2026" />
+              </label>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Osoba kontaktowa producenta</span>
+              <input id="contact" class="input" type="text" placeholder="Imię i nazwisko, telefon" />
+            </label>
+
+            <div class="two-col">
+              <label class="field">
+                <span class="field-label">Promocja od</span>
+                <input id="dateFrom" class="input" type="date" />
+              </label>
+              <label class="field">
+                <span class="field-label">Promocja do</span>
+                <input id="dateTo" class="input" type="date" />
+              </label>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Data sporządzenia</span>
+              <input id="dateDoc" class="input" type="date" />
+            </label>
+          </section>
+
+          <section class="panel summary">
+            <div class="sum-row">
+              <span>Wybrane pozycje</span>
+              <strong id="sumSelected">0 / 0</strong>
+            </div>
+            <div class="sum-row">
+              <span>Moduł</span>
+              <strong id="sumModule">—</strong>
+            </div>
+            <div class="sum-row">
+              <span>Opłata</span>
+              <strong id="sumFee">0,00 zł</strong>
+            </div>
+          </section>
+        </aside>
+
+        <!-- Obszar listy produktów -->
+        <section class="content">
+          <div class="content-header">
+            <div class="content-heading">
+              <h2 id="contentTitle">Produkty</h2>
+              <p id="contentSub" class="content-sub">Wybierz producenta, aby zobaczyć dostępne indeksy.</p>
+            </div>
+            <div class="content-tools">
+              <div class="search-wrap">
+                <svg class="search-ic" width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.4"/><path d="M11 11l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                <input id="productSearch" class="input input-search" type="search" placeholder="Filtruj po nazwie lub kodzie…" />
+              </div>
+              <button id="btnSelectAll" class="btn btn-ghost btn-sm" type="button">Zaznacz widoczne</button>
+              <button id="btnClear" class="btn btn-ghost btn-sm" type="button">Wyczyść</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <div class="table-head" role="row">
+              <div class="th th-chk"><input id="thCheck" type="checkbox" aria-label="Zaznacz wszystkie" /></div>
+              <div class="th th-id">Indeks</div>
+              <div class="th th-name">Nazwa</div>
+              <div class="th th-num">Cena Fam.</div>
+              <div class="th th-num">VAT</div>
+              <div class="th th-num">Rab. stały</div>
+              <div class="th th-num">Po rab.</div>
+              <div class="th th-num">Refund.</div>
+              <div class="th th-code">Kod EAN</div>
+              <div class="th th-code">Grupa</div>
+            </div>
+            <div id="productRows" class="table-body" role="rowgroup">
+              <div class="empty">
+                <div class="empty-ic">📦</div>
+                <p>Wybierz producenta z listy po lewej.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Modal podglądu / druku -->
+      <div id="previewOverlay" class="overlay" hidden>
+        <div class="overlay-dialog">
+          <div class="overlay-bar print-hidden">
+            <div class="overlay-title">
+              <span class="brand-dot" aria-hidden="true"></span>
+              <strong>Podgląd druku</strong>
+              <span class="chip chip-muted" id="previewChip">—</span>
+            </div>
+            <div class="overlay-actions">
+              <button id="btnPreviewClose" class="btn btn-ghost" type="button">Zamknij</button>
+              <button id="btnPreviewPrint" class="btn btn-primary" type="button">Drukuj / PDF</button>
+              <button id="btnPreviewExport" class="btn btn-secondary" type="button">Eksport XLSX</button>
+            </div>
+          </div>
+          <div id="previewSheet" class="sheet-scroll">
+            <!-- Wygenerowany druk trafia tutaj -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast -->
+      <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    </div>
+
+    <script src="./app.js"></script>
   </body>
 </html>

@@ -1,0 +1,26 @@
+{
+  "name": "Druk rezerwacji · Gazetka FAMIX",
+  "short_name": "Druk FAMIX",
+  "description": "Aplikacja do rezerwacji pozycji w gazetce promocyjnej FAMIX",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#eef2f9",
+  "theme_color": "#0a84ff",
+  "lang": "pl",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
