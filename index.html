@@ -13,8 +13,15 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
   </head>
   <body>
+    <datalist id="vatOpts">
+      <option value="0"></option>
+      <option value="5"></option>
+      <option value="8"></option>
+      <option value="23"></option>
+    </datalist>
+
     <div id="app" class="app" aria-busy="true">
-      <!-- Pasek górny w stylu macOS -->
+      <!-- Pasek okna w stylu macOS -->
       <header class="titlebar">
         <div class="traffic">
           <span class="tl tl-r" aria-hidden="true"></span>
@@ -143,13 +150,14 @@
               <div class="th th-chk"><input id="thCheck" type="checkbox" aria-label="Zaznacz wszystkie" /></div>
               <div class="th th-id">Indeks</div>
               <div class="th th-name">Nazwa</div>
-              <div class="th th-num">Cena Fam.</div>
-              <div class="th th-num">VAT</div>
-              <div class="th th-num">Rab. stały</div>
+              <div class="th th-num">Cena FAMIX</div>
+              <div class="th th-num">VAT %</div>
+              <div class="th th-num">Rab. stały %</div>
               <div class="th th-num">Po rab.</div>
-              <div class="th th-num">Refund.</div>
-              <div class="th th-code">Kod EAN</div>
-              <div class="th th-code">Grupa</div>
+              <div class="th th-num">Rab. prom %</div>
+              <div class="th th-num">Promocja netto</div>
+              <div class="th th-num">Refund. (zł)</div>
+              <div class="th th-text">Uwagi</div>
             </div>
             <div id="productRows" class="table-body" role="rowgroup">
               <div class="empty">
