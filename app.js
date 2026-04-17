@@ -264,6 +264,7 @@
         <div class="c-id">${escapeHtml(id)}</div>
         <div class="c-name" title="${escapeAttr(r.nazwa)}">${escapeHtml(r.nazwa)}</div>
         <div class="c-num">${r.cena_famix != null ? fmtNum(r.cena_famix, 2) : "—"}</div>
+        <div class="c-num" title="Cena zakupu AC">${r.cena_z != null ? fmtNum(r.cena_z, 2) : "—"}</div>
         <div class="c-num">${escapeHtml(vatDisplay)}</div>
       `;
       frag.appendChild(row);

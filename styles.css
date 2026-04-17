@@ -339,14 +339,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
    PICKER — lista wyboru
    ========================================================================= */
 .table-wrap {
-  display: flex;
-  flex-direction: column;
+  overflow: auto;
   min-height: 0;
-  overflow: hidden;
+  scrollbar-gutter: stable;
 }
 .pick-head, .pick-body > .pick-row {
   display: grid;
-  grid-template-columns: 36px 70px minmax(140px, 1fr) 82px 52px;
+  grid-template-columns: 36px 66px minmax(140px, 1fr) 78px 72px 52px;
   align-items: stretch;
 }
 .edit-head, .edit-body > .edit-row {
@@ -366,14 +365,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
   align-items: stretch;
 }
 .pick-head, .edit-head {
-  background: var(--fill-2);
+  background:
+    linear-gradient(var(--fill-2), var(--fill-2)),
+    var(--panel-solid);
   border-bottom: 1px solid var(--separator);
   font-size: 10.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--label-3);
-  position: sticky; top: 0; z-index: 2;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  box-shadow: 0 1px 0 var(--separator);
 }
 .th {
   padding: 7px 8px;
@@ -387,9 +391,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .th-act { justify-content: center; }
 
 .table-body {
-  overflow: auto;
   min-height: 0;
-  scrollbar-gutter: stable;
 }
 
 /* Wiersze pickera */
