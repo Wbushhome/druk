@@ -181,6 +181,8 @@
       rabat_zo: ov.rabat_zo !== undefined ? ov.rabat_zo : "",
       promocja_netto: ov.promocja_netto !== undefined ? ov.promocja_netto : null,
       refundacja: ov.refundacja !== undefined ? ov.refundacja : row.refundacje,
+      prom_rabat: ov.prom_rabat !== undefined ? ov.prom_rabat : "",
+      prom_pakietowa: ov.prom_pakietowa !== undefined ? ov.prom_pakietowa : "",
       uwagi: ov.uwagi !== undefined ? ov.uwagi : "",
     };
   }
@@ -189,8 +191,8 @@
     if (!STATE.current.overrides[id]) STATE.current.overrides[id] = {};
     const slot = STATE.current.overrides[id];
 
-    if (field === "uwagi") {
-      const v = String(rawValue || "");
+    if (field === "uwagi" || field === "prom_rabat" || field === "prom_pakietowa") {
+      const v = String(rawValue || "").trim();
       if (v === "") delete slot[field]; else slot[field] = v;
     } else if (field === "rabat_zo") {
       const v = String(rawValue || "").toUpperCase();
@@ -382,6 +384,18 @@
                  type="text" inputmode="decimal"
                  value="${m.refundacja != null ? fmtNum(m.refundacja, 2) : ""}"
                  placeholder="0,00" title="Refundacja producenta (zł)" />
+        </div>
+
+        <div class="c-cell">
+          <input class="cell-input text" data-id="${escapeAttr(id)}" data-field="prom_rabat"
+                 type="text" value="${escapeAttr(m.prom_rabat || "")}"
+                 placeholder="—" title="Promocyjny rabat (np. 15%, 1+1)" />
+        </div>
+
+        <div class="c-cell">
+          <input class="cell-input text" data-id="${escapeAttr(id)}" data-field="prom_pakietowa"
+                 type="text" value="${escapeAttr(m.prom_pakietowa || "")}"
+                 placeholder="—" title="Promocja pakietowa" />
         </div>
 
         <div class="c-cell">
@@ -732,8 +746,8 @@
             <td class="num">${p.refundacja != null ? fmtNum(p.refundacja, 2) : ""}</td>
             <td class="num">${p.promocja_netto != null ? fmtNum(p.promocja_netto, 2) : ""}</td>
             <td class="num">${brutto != null ? fmtNum(brutto, 2) : ""}</td>
-            <td class="num"></td>
-            <td class="num"></td>
+            <td class="center">${escapeHtml(p.prom_rabat || "")}</td>
+            <td class="center">${escapeHtml(p.prom_pakietowa || "")}</td>
             <td class="name">${escapeHtml(p.uwagi || "")}</td>
           </tr>
         `;
@@ -905,8 +919,8 @@
       setCell("L" + r, p.refundacja != null ? Number(p.refundacja) : "", styleCellNum);
       setCell("M" + r, p.promocja_netto != null ? Number(p.promocja_netto) : "", styleCellNum);
       setCell("N" + r, brutto != null ? Number(brutto) : "", styleCellNum);
-      setCell("O" + r, "", styleCellPct);
-      setCell("P" + r, "", styleCellName);
+      setCell("O" + r, p.prom_rabat || "", styleCell);
+      setCell("P" + r, p.prom_pakietowa || "", styleCellName);
       setCell("Q" + r, p.uwagi || "", styleCellName);
     });
 
