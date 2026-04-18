@@ -345,23 +345,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .pick-head, .pick-body > .pick-row {
   display: grid;
-  grid-template-columns: 36px 66px minmax(140px, 1fr) 78px 72px 52px;
+  grid-template-columns: 36px 62px minmax(140px, 1fr) 74px 70px 50px;
   align-items: stretch;
 }
 .edit-head, .edit-body > .edit-row {
   display: grid;
   grid-template-columns:
-    64px                  /* Indeks */
+    58px                  /* Indeks */
     minmax(150px, 1.3fr)  /* Nazwa */
-    82px                  /* Cena FAMIX */
-    56px                  /* VAT */
-    82px                  /* Rab. stały */
-    78px                  /* Po rab. */
-    82px                  /* Rab. prom */
-    96px                  /* Promocja netto */
-    82px                  /* Refund. */
-    minmax(110px, 1fr)    /* Uwagi */
-    32px;                 /* Usuń */
+    80px                  /* Cena FAMIX */
+    50px                  /* VAT */
+    72px                  /* Rab. stały */
+    72px                  /* Po rab. */
+    72px                  /* Rab. prom */
+    58px                  /* Z/O */
+    86px                  /* Prom. netto */
+    72px                  /* Refund. */
+    minmax(100px, 1fr)    /* Uwagi */
+    30px;                 /* Usuń */
   align-items: stretch;
 }
 .pick-head, .edit-head {
@@ -369,26 +370,31 @@ button, input, select, textarea { font: inherit; color: inherit; }
     linear-gradient(var(--fill-2), var(--fill-2)),
     var(--panel-solid);
   border-bottom: 1px solid var(--separator);
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   color: var(--label-3);
   position: sticky;
   top: 0;
   z-index: 5;
   box-shadow: 0 1px 0 var(--separator);
+  min-height: 36px;
 }
 .th {
-  padding: 7px 8px;
-  white-space: nowrap;
+  padding: 4px 6px;
+  white-space: normal;
+  line-height: 1.15;
   display: flex;
   align-items: center;
+  min-width: 0;
+  overflow: hidden;
 }
 .th-chk { justify-content: center; padding: 0; }
-.th-num { justify-content: flex-end; }
+.th-num { justify-content: flex-end; text-align: right; }
 .th-text { justify-content: flex-start; }
 .th-act { justify-content: center; }
+.th-center { justify-content: center; text-align: center; }
 
 .table-body {
   min-height: 0;
@@ -410,15 +416,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
   align-items: center;
   min-height: 32px;
   padding: 0 8px;
+  font-size: 12.5px;
+  min-width: 0;                  /* klucz dla overflow w grid items */
+  overflow: hidden;
+}
+.pick-row .c-chk { justify-content: center; padding: 0; }
+.pick-row .c-id { color: var(--label-2); font-variant-numeric: tabular-nums; }
+.pick-row .c-name { color: var(--label); font-weight: 500; }
+.pick-row .c-name > span,
+.edit-row .c-name > span {
+  display: block;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 12.5px;
+  width: 100%;
 }
-.pick-row .c-chk { justify-content: center; padding: 0; }
-.pick-row .c-id { color: var(--label-2); font-variant-numeric: tabular-nums; padding-left: 8px; }
-.pick-row .c-name { color: var(--label); font-weight: 500; }
-.pick-row .c-num { justify-content: flex-end; font-variant-numeric: tabular-nums; padding-right: 8px; }
+.pick-row .c-num { justify-content: flex-end; font-variant-numeric: tabular-nums; text-align: right; }
 
 /* =========================================================================
    EDITOR — wiersze edycji
@@ -437,6 +450,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   align-items: center;
   min-height: 36px;
   padding: 0 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 .edit-row .c-id {
   color: var(--label-2);
@@ -450,12 +465,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-weight: 500;
   font-size: 12.5px;
   padding: 0 8px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: block;
-  line-height: 1.3;
-  align-content: center;
 }
 .edit-row .c-computed {
   color: var(--label-2);
@@ -465,6 +474,40 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-size: 12px;
   font-style: italic;
 }
+
+/* Kontrolka Z/O — mini segmented */
+.zo-group {
+  display: inline-flex;
+  border: 1px solid var(--separator-strong);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--panel-solid);
+  margin: 0 auto;
+}
+.zo-btn {
+  appearance: none;
+  border: 0;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--label-3);
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: background 120ms, color 120ms;
+  min-width: 22px;
+}
+.zo-btn + .zo-btn { border-left: 1px solid var(--separator); }
+.zo-btn:hover { background: var(--fill-2); color: var(--label); }
+.zo-btn.active {
+  background: var(--sys-blue);
+  color: #fff;
+}
+.zo-btn:focus-visible {
+  outline: 0;
+  box-shadow: inset 0 0 0 2px rgba(10, 132, 255, 0.4);
+}
+.c-zo { justify-content: center; }
 
 /* Komórki edytowalne */
 .c-cell {
@@ -685,8 +728,9 @@ input[type="checkbox"]:disabled {
   .content.picker { grid-column: 2 / 3; grid-row: 1; }
   .content.editor { grid-column: 2 / 3; grid-row: 2; }
   .sidebar { grid-column: 1; grid-row: 1 / 3; }
-  .table-wrap { overflow-x: auto; }
-  .edit-head, .edit-body > .edit-row { min-width: 1020px; }
+  .table-wrap { overflow: auto; }
+  .edit-head, .edit-body > .edit-row { min-width: 920px; }
+  .pick-head, .pick-body > .pick-row { min-width: 480px; }
 }
 @media (max-width: 820px) {
   .workspace {

@@ -178,6 +178,7 @@
       vat: ov.vat !== undefined ? ov.vat : row.vat,
       stale: ov.stale !== undefined ? ov.stale : row.stale,
       rabat_prom: ov.rabat_prom !== undefined ? ov.rabat_prom : null,
+      rabat_zo: ov.rabat_zo !== undefined ? ov.rabat_zo : "",
       promocja_netto: ov.promocja_netto !== undefined ? ov.promocja_netto : null,
       refundacja: ov.refundacja !== undefined ? ov.refundacja : row.refundacje,
       uwagi: ov.uwagi !== undefined ? ov.uwagi : "",
@@ -191,6 +192,9 @@
     if (field === "uwagi") {
       const v = String(rawValue || "");
       if (v === "") delete slot[field]; else slot[field] = v;
+    } else if (field === "rabat_zo") {
+      const v = String(rawValue || "").toUpperCase();
+      if (v !== "Z" && v !== "O") delete slot[field]; else slot[field] = v;
     } else if (field === "vat") {
       if (rawValue === "" || rawValue == null) delete slot[field];
       else slot[field] = String(rawValue);
@@ -262,7 +266,7 @@
       row.innerHTML = `
         <div class="c-chk">${checkboxHTML}</div>
         <div class="c-id">${escapeHtml(id)}</div>
-        <div class="c-name" title="${escapeAttr(r.nazwa)}">${escapeHtml(r.nazwa)}</div>
+        <div class="c-name" title="${escapeAttr(r.nazwa)}"><span>${escapeHtml(r.nazwa)}</span></div>
         <div class="c-num">${r.cena_famix != null ? fmtNum(r.cena_famix, 2) : "—"}</div>
         <div class="c-num" title="Cena zakupu AC">${r.cena_z != null ? fmtNum(r.cena_z, 2) : "—"}</div>
         <div class="c-num">${escapeHtml(vatDisplay)}</div>
@@ -327,7 +331,7 @@
       row.dataset.id = id;
       row.innerHTML = `
         <div class="c-id">${escapeHtml(id)}</div>
-        <div class="c-name" title="${escapeAttr(r.nazwa)}">${escapeHtml(r.nazwa)}</div>
+        <div class="c-name" title="${escapeAttr(r.nazwa)}"><span>${escapeHtml(r.nazwa)}</span></div>
 
         <div class="c-cell">
           <input class="cell-input num" data-id="${escapeAttr(id)}" data-field="cena_famix"
@@ -357,6 +361,13 @@
                  type="text" inputmode="decimal"
                  value="${m.rabat_prom != null ? fmtNum((+m.rabat_prom) * 100, 2) : ""}"
                  placeholder="0,00" title="Rabat promocyjny %" />
+        </div>
+
+        <div class="c-zo" data-zo-row="${escapeAttr(id)}">
+          <div class="zo-group" role="radiogroup" aria-label="Rabat Z lub O">
+            <button type="button" class="zo-btn${m.rabat_zo === "Z" ? " active" : ""}" data-zo="Z" title="Rabat zakupowy">Z</button>
+            <button type="button" class="zo-btn${m.rabat_zo === "O" ? " active" : ""}" data-zo="O" title="Rabat odsprzedażowy">O</button>
+          </div>
         </div>
 
         <div class="c-cell">
@@ -531,14 +542,32 @@
     });
 
     editor.addEventListener("click", (e) => {
+      // Remove row
       const btn = e.target.closest("[data-remove]");
-      if (!btn) return;
-      const id = btn.dataset.remove;
-      STATE.current.selectedIds.delete(id);
-      delete STATE.current.overrides[id];
-      renderEditor();
-      renderPicker();
-      persistState();
+      if (btn) {
+        const id = btn.dataset.remove;
+        STATE.current.selectedIds.delete(id);
+        delete STATE.current.overrides[id];
+        renderEditor();
+        renderPicker();
+        persistState();
+        return;
+      }
+      // Toggle Z/O
+      const zoBtn = e.target.closest(".zo-btn");
+      if (zoBtn) {
+        const group = zoBtn.closest("[data-zo-row]");
+        if (!group) return;
+        const id = group.dataset.zoRow;
+        const val = zoBtn.dataset.zo;
+        const current = STATE.current.overrides[id]?.rabat_zo || "";
+        const next = current === val ? "" : val;
+        setOverride(id, "rabat_zo", next);
+        group.querySelectorAll(".zo-btn").forEach((b) => {
+          b.classList.toggle("active", next !== "" && b.dataset.zo === next);
+        });
+        return;
+      }
     });
 
     $("#btnClearAll").addEventListener("click", () => {
@@ -698,7 +727,7 @@
             <td class="num">${p.stale != null ? fmtPct(p.stale) : ""}</td>
             <td class="num">${afterStale != null ? fmtNum(afterStale, 2) : ""}</td>
             <td class="num">${p.rabat_prom != null ? fmtPct(p.rabat_prom) : ""}</td>
-            <td class="num"></td>
+            <td class="center" style="font-weight:700">${escapeHtml(p.rabat_zo || "")}</td>
             <td class="num">${afterProm != null ? fmtNum(afterProm, 2) : ""}</td>
             <td class="num">${p.refundacja != null ? fmtNum(p.refundacja, 2) : ""}</td>
             <td class="num">${p.promocja_netto != null ? fmtNum(p.promocja_netto, 2) : ""}</td>
@@ -863,7 +892,15 @@
       setCell("G" + r, p.stale != null ? Number(p.stale) : "", styleCellPct);
       setCell("H" + r, afterStale != null ? Number(afterStale) : "", styleCellNum);
       setCell("I" + r, p.rabat_prom != null ? Number(p.rabat_prom) : "", styleCellPct);
-      setCell("J" + r, "", styleCellPct);
+      if (p.rabat_zo === "Z" || p.rabat_zo === "O") {
+        ws["J" + r] = {
+          v: p.rabat_zo,
+          s: { border, font:{sz:11,bold:true}, alignment:{horizontal:"center",vertical:"center"} },
+          t: "s",
+        };
+      } else {
+        setCell("J" + r, "", styleCell);
+      }
       setCell("K" + r, afterProm != null ? Number(afterProm) : "", styleCellNum);
       setCell("L" + r, p.refundacja != null ? Number(p.refundacja) : "", styleCellNum);
       setCell("M" + r, p.promocja_netto != null ? Number(p.promocja_netto) : "", styleCellNum);
