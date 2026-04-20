@@ -175,6 +175,10 @@
               <p id="editorSub" class="content-sub">Dodaj pozycje z lewej strony, a potem uzupełnij wartości promocyjne.</p>
             </div>
             <div class="content-tools">
+              <div class="calc-mode-group" role="radiogroup" aria-label="Tryb naliczania rabatu promocyjnego">
+                <button type="button" class="calc-btn active" data-calc="cascade" title="Rabat stały i promocyjny naliczane kolejno (mnożone)">Kaskadowo</button>
+                <button type="button" class="calc-btn" data-calc="sum" title="Rabaty zsumowane i odjęte razem od ceny">Sumarycznie</button>
+              </div>
               <button id="btnClearAll" class="btn btn-ghost btn-sm" type="button">Wyczyść wszystko</button>
             </div>
           </div>
@@ -197,6 +201,7 @@
               <div class="th th-text">Prom. rabat</div>
               <div class="th th-text">Prom. pakiet.</div>
               <div class="th th-text">Uwagi</div>
+              <div class="th th-num" title="Marża % liczona od C. po rab. prom. (z uwzględnieniem refundacji) vs Cena zakupu AC">Marża</div>
               <div class="th th-act"></div>
             </div>
             <div id="editorRows" class="table-body edit-body" role="rowgroup">

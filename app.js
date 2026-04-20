@@ -30,6 +30,7 @@
       selectedIds: new Set(), // pozycje dodane do druku
       search: "",
       overrides: {},          // edytowane wartości per towar_id
+      calcMode: "cascade",    // "cascade" (mnożąco) | "sum" (sumarycznie)
     },
     pickerChecked: new Set(), // transient: zaznaczone w pickerze do dodania
   };
@@ -211,6 +212,47 @@
     persistState();
   }
 
+  /**
+   * Centralne wyliczenia dla jednego wiersza (UI, preview, XLSX).
+   *  Tryb kaskadowy: Po rab. stał. * (1 - rab.prom) - refund
+   *  Tryb sumaryczny: cena_famix * (1 - rab.stały - rab.prom) - refund
+   *  Marża % = (C. po rab. prom. - cena_z) / C. po rab. prom.
+   */
+  function computeRow(m, mode) {
+    const cena = m.cena_famix != null ? +m.cena_famix : null;
+    const stale = m.stale != null ? +m.stale : null;
+    const prom = m.rabat_prom != null ? +m.rabat_prom : null;
+    const refund = m.refundacja != null ? +m.refundacja : 0;
+
+    const afterStale = (cena != null && stale != null) ? cena * (1 - stale) : null;
+
+    let afterProm = null;
+    if (cena != null && prom != null) {
+      if (mode === "sum") {
+        const total = (stale || 0) + prom;
+        afterProm = cena * (1 - total);
+      } else {
+        afterProm = afterStale != null ? afterStale * (1 - prom) : cena * (1 - prom);
+      }
+      afterProm -= refund;
+    } else if (refund > 0 && afterStale != null) {
+      // brak rabatu prom, ale jest refundacja → C. po rab. prom. = Po rab. stał. - refund
+      afterProm = afterStale - refund;
+    }
+
+    const vatFrac = parsePct(m.vat);
+    const brutto = m.promocja_netto != null && vatFrac != null
+      ? (+m.promocja_netto) * (1 + vatFrac)
+      : null;
+
+    let marza = null;
+    if (afterProm != null && afterProm !== 0 && m.cena_z != null && +m.cena_z > 0) {
+      marza = (afterProm - (+m.cena_z)) / afterProm;
+    }
+
+    return { afterStale, afterProm, brutto, marza, vatFrac };
+  }
+
   // -------------------------------------------------------------------------
   // PICKER — lewa lista
   // -------------------------------------------------------------------------
@@ -323,23 +365,14 @@
     rows.forEach((r) => {
       const id = String(r.towar_id);
       const m = getMerged(r);
-      const afterStale =
-        m.cena_famix != null && m.stale != null
-          ? (+m.cena_famix) * (1 - (+m.stale))
-          : null;
-      const afterProm =
-        afterStale != null && m.rabat_prom != null
-          ? afterStale * (1 - (+m.rabat_prom))
-          : null;
-      const vatFrac = parsePct(m.vat);
-      const brutto =
-        m.promocja_netto != null && vatFrac != null
-          ? (+m.promocja_netto) * (1 + vatFrac)
-          : null;
+      const calc = computeRow(m, STATE.current.calcMode);
 
       const row = document.createElement("div");
       row.className = "edit-row";
       row.dataset.id = id;
+      const marzaClass = calc.marza == null ? "" : (calc.marza >= 0 ? " pos" : " neg");
+      const marzaText = calc.marza == null ? "—" : fmtPct(calc.marza);
+
       row.innerHTML = `
         <div class="c-id">${escapeHtml(id)}</div>
         <div class="c-name" title="${escapeAttr(r.nazwa)}"><span>${escapeHtml(r.nazwa)}</span></div>
@@ -366,7 +399,7 @@
                  placeholder="0,00" title="Rabat stały %" />
         </div>
 
-        <div class="c-computed" data-computed="po_rab" title="Cena po rabacie stałym">${afterStale != null ? fmtNum(afterStale, 2) : "—"}</div>
+        <div class="c-computed" data-computed="po_rab" title="Cena po rabacie stałym">${calc.afterStale != null ? fmtNum(calc.afterStale, 2) : "—"}</div>
 
         <div class="c-cell">
           <input class="cell-input num" data-id="${escapeAttr(id)}" data-field="rabat_prom"
@@ -382,13 +415,13 @@
           </div>
         </div>
 
-        <div class="c-computed" data-computed="po_prom" title="Cena po rabacie promocyjnym">${afterProm != null ? fmtNum(afterProm, 2) : "—"}</div>
+        <div class="c-computed" data-computed="po_prom" title="Cena po rabacie promocyjnym (z uwzględnieniem refundacji)">${calc.afterProm != null ? fmtNum(calc.afterProm, 2) : "—"}</div>
 
         <div class="c-cell">
           <input class="cell-input num" data-id="${escapeAttr(id)}" data-field="refundacja"
                  type="text" inputmode="decimal"
                  value="${m.refundacja != null ? fmtNum(m.refundacja, 2) : ""}"
-                 placeholder="0,00" title="Refundacja odsprzedażowa (zł)" />
+                 placeholder="0,00" title="Refundacja odsprzedażowa (zł/szt)" />
         </div>
 
         <div class="c-cell">
@@ -398,7 +431,7 @@
                  placeholder="0,00" title="Promocja cenowa netto (zł)" />
         </div>
 
-        <div class="c-computed" data-computed="brutto" title="Promocja cenowa brutto (netto × VAT)">${brutto != null ? fmtNum(brutto, 2) : "—"}</div>
+        <div class="c-computed" data-computed="brutto" title="Promocja cenowa brutto (netto × VAT)">${calc.brutto != null ? fmtNum(calc.brutto, 2) : "—"}</div>
 
         <div class="c-cell">
           <input class="cell-input text" data-id="${escapeAttr(id)}" data-field="prom_rabat"
@@ -418,6 +451,8 @@
                  placeholder="—" title="Uwagi" />
         </div>
 
+        <div class="c-marza${marzaClass}" data-computed="marza" title="Marża % = (C. po rab. prom. − Cena zakupu AC) / C. po rab. prom.">${marzaText}</div>
+
         <div class="c-chk">
           <button class="btn btn-icon" data-remove="${escapeAttr(id)}" title="Usuń z druku" aria-label="Usuń">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
@@ -436,28 +471,26 @@
     const base = STATE.rows.find((r) => String(r.towar_id) === id);
     if (!base) return;
     const m = getMerged(base);
-
-    const afterStale =
-      m.cena_famix != null && m.stale != null
-        ? (+m.cena_famix) * (1 - (+m.stale))
-        : null;
-    const afterProm =
-      afterStale != null && m.rabat_prom != null
-        ? afterStale * (1 - (+m.rabat_prom))
-        : null;
-    const vatFrac = parsePct(m.vat);
-    const brutto =
-      m.promocja_netto != null && vatFrac != null
-        ? (+m.promocja_netto) * (1 + vatFrac)
-        : null;
+    const calc = computeRow(m, STATE.current.calcMode);
 
     const setCalc = (key, val) => {
       const cell = rowEl.querySelector(`[data-computed="${key}"]`);
       if (cell) cell.textContent = val != null ? fmtNum(val, 2) : "—";
     };
-    setCalc("po_rab", afterStale);
-    setCalc("po_prom", afterProm);
-    setCalc("brutto", brutto);
+    setCalc("po_rab", calc.afterStale);
+    setCalc("po_prom", calc.afterProm);
+    setCalc("brutto", calc.brutto);
+
+    const marzaCell = rowEl.querySelector('[data-computed="marza"]');
+    if (marzaCell) {
+      marzaCell.textContent = calc.marza == null ? "—" : fmtPct(calc.marza);
+      marzaCell.classList.remove("pos", "neg");
+      if (calc.marza != null) marzaCell.classList.add(calc.marza >= 0 ? "pos" : "neg");
+    }
+  }
+
+  function recomputeAllEditorRows() {
+    document.querySelectorAll("#editorRows .edit-row").forEach(recomputeEditorRow);
   }
 
   function updateSummary() {
@@ -625,6 +658,20 @@
       persistState();
     });
 
+    // Przełącznik trybu kalkulacji (kaskadowo / sumarycznie)
+    document.querySelectorAll(".calc-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const mode = btn.dataset.calc;
+        if (STATE.current.calcMode === mode) return;
+        STATE.current.calcMode = mode;
+        document.querySelectorAll(".calc-btn").forEach((b) => {
+          b.classList.toggle("active", b.dataset.calc === mode);
+        });
+        recomputeAllEditorRows();
+        persistState();
+      });
+    });
+
     $("#btnReload").addEventListener("click", loadDatabase);
 
     $("#btnPreview").addEventListener("click", openPreview);
@@ -712,6 +759,12 @@
         $("#producerHint").textContent = `${STATE.producerIndex.get(data.producer)?.length ?? 0} indeksów w bazie`;
       }
       updateModuleUI();
+      // Synchronizacja przełącznika trybu kalkulacji
+      const mode = STATE.current.calcMode || "cascade";
+      STATE.current.calcMode = mode;
+      document.querySelectorAll(".calc-btn").forEach((b) => {
+        b.classList.toggle("active", b.dataset.calc === mode);
+      });
       renderPicker();
       renderEditor();
       updateSummary();
@@ -745,22 +798,14 @@
       (c.dateFrom ? fmtDatePL(c.dateFrom) : "—") + " – " + (c.dateTo ? fmtDatePL(c.dateTo) : "—");
 
     const rowsHTML = products
-      .map((p, idx) => {
-        const afterStale =
-          p.cena_famix != null && p.stale != null
-            ? (+p.cena_famix) * (1 - (+p.stale))
-            : null;
-        const afterProm =
-          afterStale != null && p.rabat_prom != null
-            ? afterStale * (1 - (+p.rabat_prom))
-            : null;
-        const vatFrac = parsePct(p.vat);
+      .map((p) => {
+        const calc = computeRow(p, STATE.current.calcMode);
         const vatStr = p.vat != null && p.vat !== ""
-          ? (vatFrac != null ? fmtNum(vatFrac * 100, 0) + "%" : String(p.vat))
+          ? (calc.vatFrac != null ? fmtNum(calc.vatFrac * 100, 0) + "%" : String(p.vat))
           : "";
-        const brutto = p.promocja_netto != null && vatFrac != null
-          ? (+p.promocja_netto) * (1 + vatFrac)
-          : null;
+        const marzaStr = calc.marza == null ? "" : fmtPct(calc.marza);
+        const marzaColor = calc.marza == null ? "" :
+          (calc.marza >= 0 ? "color:#1e7e32;font-weight:700" : "color:#c1272d;font-weight:700");
         return `
           <tr>
             <td class="center">${escapeHtml(String(p.towar_id))}</td>
@@ -769,16 +814,17 @@
             <td class="num">${fmtNum(p.cena_famix, 2)}</td>
             <td class="center">${escapeHtml(vatStr)}</td>
             <td class="num">${p.stale != null ? fmtPct(p.stale) : ""}</td>
-            <td class="num">${afterStale != null ? fmtNum(afterStale, 2) : ""}</td>
+            <td class="num">${calc.afterStale != null ? fmtNum(calc.afterStale, 2) : ""}</td>
             <td class="num">${p.rabat_prom != null ? fmtPct(p.rabat_prom) : ""}</td>
             <td class="center" style="font-weight:700">${escapeHtml(p.rabat_zo || "")}</td>
-            <td class="num">${afterProm != null ? fmtNum(afterProm, 2) : ""}</td>
+            <td class="num">${calc.afterProm != null ? fmtNum(calc.afterProm, 2) : ""}</td>
             <td class="num">${p.refundacja != null ? fmtNum(p.refundacja, 2) : ""}</td>
             <td class="num">${p.promocja_netto != null ? fmtNum(p.promocja_netto, 2) : ""}</td>
-            <td class="num">${brutto != null ? fmtNum(brutto, 2) : ""}</td>
+            <td class="num">${calc.brutto != null ? fmtNum(calc.brutto, 2) : ""}</td>
             <td class="center">${escapeHtml(p.prom_rabat || "")}</td>
             <td class="center">${escapeHtml(p.prom_pakietowa || "")}</td>
             <td class="name">${escapeHtml(p.uwagi || "")}</td>
+            <td class="num" style="${marzaColor}">${marzaStr}</td>
           </tr>
         `;
       })
@@ -833,6 +879,7 @@
               <th rowspan="2" class="orange">Prom. rabat.</th>
               <th rowspan="2" class="orange">Promocja Pakietowa</th>
               <th rowspan="2">Uwagi dot. pozycji lub modułu</th>
+              <th rowspan="2" style="background:#e6e6e6">Marża %</th>
             </tr>
             <tr>
               <th class="orange">Netto</th>
@@ -918,6 +965,7 @@
       ["N8","Prom. rabat.",true],
       ["O8","Promocja Pakietowa",true],
       ["P8","Uwagi dot. pozycji lub modułu",false],
+      ["Q8","Marża %",false],
     ];
     mainHeaders.forEach(([a,v,orange]) => setCell(a, v, orange ? styleHeaderOrange : styleHeaderGray));
     // M8 to prawa część merge'u L8:M8 — puste, ale ostylowane
@@ -925,7 +973,7 @@
     // Row 9: pod-nagłówki dla kolumn L/M (Netto/Brutto) + puste ostylowane dla reszty (żeby merge rowspan=2 dobrze się odwzorował)
     setCell("L9", "Netto", styleHeaderOrange);
     setCell("M9", "Brutto", styleHeaderOrange);
-    ["A","B","C","D","E","F","G","H","I","J","K","N","O","P"].forEach((col) => {
+    ["A","B","C","D","E","F","G","H","I","J","K","N","O","P","Q"].forEach((col) => {
       if (!ws[col + "9"]) setCell(col + "9", "", styleHeaderGray);
     });
 
@@ -933,22 +981,19 @@
     const startRow = 10;
     prods.forEach((p, i) => {
       const r = startRow + i;
-      const afterStale = p.cena_famix != null && p.stale != null ? (+p.cena_famix) * (1 - (+p.stale)) : null;
-      const afterProm = afterStale != null && p.rabat_prom != null ? afterStale * (1 - (+p.rabat_prom)) : null;
-      const vatFrac = parsePct(p.vat);
-      const brutto = p.promocja_netto != null && vatFrac != null ? (+p.promocja_netto) * (1 + vatFrac) : null;
+      const calc = computeRow(p, STATE.current.calcMode);
 
       setCell("A" + r, p.towar_id, styleCell);                                                 // Indeks
       setCell("B" + r, p.nazwa, styleCellName);                                                // Nazwa
       setCell("C" + r, p.jm || "", styleCell);                                                 // Jm
       setCell("D" + r, p.cena_famix != null ? Number(p.cena_famix) : "", styleCellNum);        // Cena Fam.
-      if (vatFrac != null) {
-        ws["E" + r] = { v: vatFrac, s: styleCellPct, t: "n" };                                  // VAT (frakcja)
+      if (calc.vatFrac != null) {
+        ws["E" + r] = { v: calc.vatFrac, s: styleCellPct, t: "n" };                             // VAT (frakcja)
       } else {
         setCell("E" + r, p.vat || "", styleCell);
       }
       setCell("F" + r, p.stale != null ? Number(p.stale) : "", styleCellPct);                   // Rabat stały
-      setCell("G" + r, afterStale != null ? Number(afterStale) : "", styleCellNum);             // Cena po rab. stał.
+      setCell("G" + r, calc.afterStale != null ? Number(calc.afterStale) : "", styleCellNum);   // Cena po rab. stał.
       setCell("H" + r, p.rabat_prom != null ? Number(p.rabat_prom) : "", styleCellPct);         // Rabat prom
       if (p.rabat_zo === "Z" || p.rabat_zo === "O") {                                           // Rab. Z/O
         ws["I" + r] = {
@@ -959,13 +1004,29 @@
       } else {
         setCell("I" + r, "", styleCell);
       }
-      setCell("J" + r, afterProm != null ? Number(afterProm) : "", styleCellNum);               // C. po rab. prom.
+      setCell("J" + r, calc.afterProm != null ? Number(calc.afterProm) : "", styleCellNum);     // C. po rab. prom. (z refund.)
       setCell("K" + r, p.refundacja != null ? Number(p.refundacja) : "", styleCellNum);         // Refund. odsp.
       setCell("L" + r, p.promocja_netto != null ? Number(p.promocja_netto) : "", styleCellNum); // Prom. Netto
-      setCell("M" + r, brutto != null ? Number(brutto) : "", styleCellNum);                     // Prom. Brutto
+      setCell("M" + r, calc.brutto != null ? Number(calc.brutto) : "", styleCellNum);           // Prom. Brutto
       setCell("N" + r, p.prom_rabat || "", styleCell);                                          // Prom. rabat.
       setCell("O" + r, p.prom_pakietowa || "", styleCellName);                                  // Promocja Pakietowa
       setCell("P" + r, p.uwagi || "", styleCellName);                                           // Uwagi
+      // Marża — kolorowana na zielono/czerwono
+      if (calc.marza != null) {
+        const marzaColor = calc.marza >= 0 ? "1E7E32" : "C1272D";
+        ws["Q" + r] = {
+          v: calc.marza,
+          s: {
+            border,
+            font: { sz:10, bold:true, color:{ rgb: marzaColor } },
+            alignment: { horizontal:"right", vertical:"center" },
+            numFmt: "0.00%",
+          },
+          t: "n",
+        };
+      } else {
+        setCell("Q" + r, "", styleCellPct);
+      }
     });
 
     // --- Merges ---
@@ -980,7 +1041,7 @@
       { s:{r:5,c:6}, e:{r:5,c:8} },
       { s:{r:5,c:9}, e:{r:5,c:15} },
       // Nagłówki tabeli: rowspan=2 dla kolumn które nie są pod "Promocja cenowa"
-      ...["A","B","C","D","E","F","G","H","I","J","K","N","O","P"].map((col) => {
+      ...["A","B","C","D","E","F","G","H","I","J","K","N","O","P","Q"].map((col) => {
         const ci = XLSX.utils.decode_col(col);
         return { s:{r:7,c:ci}, e:{r:8,c:ci} };
       }),
@@ -1006,11 +1067,12 @@
       { wch:10 },  // N Prom. rabat.
       { wch:16 },  // O Promocja Pakietowa
       { wch:30 },  // P Uwagi
+      { wch:10 },  // Q Marża %
     ];
     ws["!rows"] = [ { hpx:18 },{ hpx:22 },{ hpx:18 },{ hpx:10 },{ hpx:16 },{ hpx:28 },{ hpx:10 },{ hpx:28 },{ hpx:18 } ];
 
     const lastRow = startRow + prods.length - 1;
-    ws["!ref"] = `A1:P${Math.max(lastRow, 10)}`;
+    ws["!ref"] = `A1:Q${Math.max(lastRow, 10)}`;
     ws["!pageSetup"] = { orientation:"landscape", paperSize:9 };
     ws["!margins"] = { left:0.3, right:0.3, top:0.4, bottom:0.4, header:0.2, footer:0.2 };
 
