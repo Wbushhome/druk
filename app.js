@@ -327,6 +327,15 @@
         m.cena_famix != null && m.stale != null
           ? (+m.cena_famix) * (1 - (+m.stale))
           : null;
+      const afterProm =
+        afterStale != null && m.rabat_prom != null
+          ? afterStale * (1 - (+m.rabat_prom))
+          : null;
+      const vatFrac = parsePct(m.vat);
+      const brutto =
+        m.promocja_netto != null && vatFrac != null
+          ? (+m.promocja_netto) * (1 + vatFrac)
+          : null;
 
       const row = document.createElement("div");
       row.className = "edit-row";
@@ -334,6 +343,7 @@
       row.innerHTML = `
         <div class="c-id">${escapeHtml(id)}</div>
         <div class="c-name" title="${escapeAttr(r.nazwa)}"><span>${escapeHtml(r.nazwa)}</span></div>
+        <div class="c-center" title="Jednostka miary">${escapeHtml(String(r.jm || ""))}</div>
 
         <div class="c-cell">
           <input class="cell-input num" data-id="${escapeAttr(id)}" data-field="cena_famix"
@@ -372,6 +382,15 @@
           </div>
         </div>
 
+        <div class="c-computed" data-computed="po_prom" title="Cena po rabacie promocyjnym">${afterProm != null ? fmtNum(afterProm, 2) : "—"}</div>
+
+        <div class="c-cell">
+          <input class="cell-input num" data-id="${escapeAttr(id)}" data-field="refundacja"
+                 type="text" inputmode="decimal"
+                 value="${m.refundacja != null ? fmtNum(m.refundacja, 2) : ""}"
+                 placeholder="0,00" title="Refundacja odsprzedażowa (zł)" />
+        </div>
+
         <div class="c-cell">
           <input class="cell-input num" data-id="${escapeAttr(id)}" data-field="promocja_netto"
                  type="text" inputmode="decimal"
@@ -379,12 +398,7 @@
                  placeholder="0,00" title="Promocja cenowa netto (zł)" />
         </div>
 
-        <div class="c-cell">
-          <input class="cell-input num" data-id="${escapeAttr(id)}" data-field="refundacja"
-                 type="text" inputmode="decimal"
-                 value="${m.refundacja != null ? fmtNum(m.refundacja, 2) : ""}"
-                 placeholder="0,00" title="Refundacja producenta (zł)" />
-        </div>
+        <div class="c-computed" data-computed="brutto" title="Promocja cenowa brutto (netto × VAT)">${brutto != null ? fmtNum(brutto, 2) : "—"}</div>
 
         <div class="c-cell">
           <input class="cell-input text" data-id="${escapeAttr(id)}" data-field="prom_rabat"
@@ -422,12 +436,28 @@
     const base = STATE.rows.find((r) => String(r.towar_id) === id);
     if (!base) return;
     const m = getMerged(base);
+
     const afterStale =
       m.cena_famix != null && m.stale != null
         ? (+m.cena_famix) * (1 - (+m.stale))
         : null;
-    const cell = rowEl.querySelector('[data-computed="po_rab"]');
-    if (cell) cell.textContent = afterStale != null ? fmtNum(afterStale, 2) : "—";
+    const afterProm =
+      afterStale != null && m.rabat_prom != null
+        ? afterStale * (1 - (+m.rabat_prom))
+        : null;
+    const vatFrac = parsePct(m.vat);
+    const brutto =
+      m.promocja_netto != null && vatFrac != null
+        ? (+m.promocja_netto) * (1 + vatFrac)
+        : null;
+
+    const setCalc = (key, val) => {
+      const cell = rowEl.querySelector(`[data-computed="${key}"]`);
+      if (cell) cell.textContent = val != null ? fmtNum(val, 2) : "—";
+    };
+    setCalc("po_rab", afterStale);
+    setCalc("po_prom", afterProm);
+    setCalc("brutto", brutto);
   }
 
   function updateSummary() {
@@ -552,7 +582,8 @@
       const field = inp.dataset.field;
       setOverride(id, field, inp.value);
       const rowEl = inp.closest(".edit-row");
-      if (field === "cena_famix" || field === "stale") recomputeEditorRow(rowEl);
+      // Dowolna zmiana może wpłynąć na którąkolwiek wyliczaną komórkę
+      recomputeEditorRow(rowEl);
     });
 
     editor.addEventListener("click", (e) => {
@@ -732,7 +763,6 @@
           : null;
         return `
           <tr>
-            <td class="center">${idx + 1}</td>
             <td class="center">${escapeHtml(String(p.towar_id))}</td>
             <td class="name">${escapeHtml(p.nazwa)}</td>
             <td class="center">${escapeHtml(String(p.jm ?? ""))}</td>
@@ -788,7 +818,6 @@
         <table class="sheet-table">
           <thead>
             <tr>
-              <th rowspan="2">Lp.</th>
               <th rowspan="2">Indeks</th>
               <th rowspan="2">Nazwa</th>
               <th rowspan="2">Jm</th>
@@ -850,41 +879,57 @@
       ws[addr] = { v, s, t: typeof v === "number" ? "n" : "s" };
     };
 
-    setCell("B1", "Przedsiębiorstwo Handlowe", { font:{sz:10} });
-    setCell("B2", '"FAMIX" Sp. z o.o.', { font:{sz:12,bold:true} });
-    setCell("B3", "35-234 Rzeszów, ul. Trembeckiego 11", { font:{sz:10} });
-    setCell("F1", "POTWIERDZENIE UDZIAŁU W PROMOCJI:", styleTitle);
-    setCell("F2", c.newsletter || "Gazetka", styleNl);
-    setCell("F3", "Data promocji: " + (c.dateFrom ? fmtDatePL(c.dateFrom) : "—") + " – " + (c.dateTo ? fmtDatePL(c.dateTo) : "—"),
+    // --- Nagłówek (firma / tytuł / data) ---
+    setCell("A1", "Przedsiębiorstwo Handlowe", { font:{sz:10} });
+    setCell("A2", '"FAMIX" Sp. z o.o.', { font:{sz:12,bold:true} });
+    setCell("A3", "35-234 Rzeszów, ul. Trembeckiego 11", { font:{sz:10} });
+    setCell("E1", "POTWIERDZENIE UDZIAŁU W PROMOCJI:", styleTitle);
+    setCell("E2", c.newsletter || "Gazetka", styleNl);
+    setCell("E3", "Data promocji: " + (c.dateFrom ? fmtDatePL(c.dateFrom) : "—") + " – " + (c.dateTo ? fmtDatePL(c.dateTo) : "—"),
       { font:{sz:10,italic:true}, alignment:{horizontal:"center"} });
-    setCell("O1", "Rzeszów, dnia:", { font:{sz:10}, alignment:{horizontal:"right"} });
-    setCell("O2", fmtDatePL(c.dateDoc) || "", { font:{sz:11,bold:true}, alignment:{horizontal:"right"} });
+    setCell("N1", "Rzeszów, dnia:", { font:{sz:10}, alignment:{horizontal:"right"} });
+    setCell("N2", fmtDatePL(c.dateDoc) || "", { font:{sz:11,bold:true}, alignment:{horizontal:"right"} });
 
-    setCell("B5", "Producent:", styleLabel);
-    setCell("B6", c.producer || "", styleBoxHl);
-    setCell("E5", "Moduł:", styleLabel);
-    setCell("E6", c.module || "", styleBoxHl);
-    setCell("H5", "Opłata:", styleLabel);
-    setCell("H6", c.fee ? Number(c.fee) : "", { ...styleBox, numFmt:'#,##0.00" zł"' });
-    setCell("K5", "Osoba kontaktowa producenta:", styleLabel);
-    setCell("K6", c.contact || "", styleBox);
+    // --- Meta (producent / moduł / opłata / kontakt) ---
+    setCell("A5", "Producent:", styleLabel);
+    setCell("A6", c.producer || "", styleBoxHl);
+    setCell("D5", "Moduł:", styleLabel);
+    setCell("D6", c.module || "", styleBoxHl);
+    setCell("G5", "Opłata:", styleLabel);
+    setCell("G6", c.fee ? Number(c.fee) : "", { ...styleBox, numFmt:'#,##0.00" zł"' });
+    setCell("J5", "Osoba kontaktowa producenta:", styleLabel);
+    setCell("J6", c.contact || "", styleBox);
 
-    const headersRow8 = [
-      ["A8","Lp."],["B8","Indeks"],["C8","Nazwa"],["D8","Jm"],["E8","Cena Fam."],
-      ["F8","VAT"],["G8","Rabat stały"],["H8","Cena po rab. stał."],
-      ["I8","Rabat prom",true],["J8","Rab. Z/O",true],["K8","C. po rab. prom.",true],
-      ["L8","Refund. odsp. (zł)"],["M8","Promocja cenowa",true],
-      ["O8","Prom. rabat.",true],["P8","Promocja Pakietowa",true],
-      ["Q8","Uwagi dot. pozycji lub modułu"],
+    // --- Nagłówki tabeli (wiersze 8-9) ---
+    // Row 8: główne nagłówki (większość z rowspan=2, stąd row 9 puste dla tych)
+    const mainHeaders = [
+      ["A8","Indeks",false],
+      ["B8","Nazwa",false],
+      ["C8","Jm",false],
+      ["D8","Cena Fam.",false],
+      ["E8","VAT",false],
+      ["F8","Rabat stały",false],
+      ["G8","Cena po rab. stał.",false],
+      ["H8","Rabat prom",true],
+      ["I8","Rab. Z/O",true],
+      ["J8","C. po rab. prom.",true],
+      ["K8","Refund. odsp. (zł)",false],
+      ["L8","Promocja cenowa",true],   // merged L8:M8 (colspan 2)
+      ["N8","Prom. rabat.",true],
+      ["O8","Promocja Pakietowa",true],
+      ["P8","Uwagi dot. pozycji lub modułu",false],
     ];
-    headersRow8.forEach(([a,v,orange]) => setCell(a, v, orange ? styleHeaderOrange : styleHeaderGray));
-    setCell("N8", "", styleHeaderOrange);
-    setCell("M9", "Netto", styleHeaderOrange);
-    setCell("N9", "Brutto", styleHeaderOrange);
-    ["A","B","C","D","E","F","G","H","I","J","K","L","O","P","Q"].forEach((col) => {
+    mainHeaders.forEach(([a,v,orange]) => setCell(a, v, orange ? styleHeaderOrange : styleHeaderGray));
+    // M8 to prawa część merge'u L8:M8 — puste, ale ostylowane
+    setCell("M8", "", styleHeaderOrange);
+    // Row 9: pod-nagłówki dla kolumn L/M (Netto/Brutto) + puste ostylowane dla reszty (żeby merge rowspan=2 dobrze się odwzorował)
+    setCell("L9", "Netto", styleHeaderOrange);
+    setCell("M9", "Brutto", styleHeaderOrange);
+    ["A","B","C","D","E","F","G","H","I","J","K","N","O","P"].forEach((col) => {
       if (!ws[col + "9"]) setCell(col + "9", "", styleHeaderGray);
     });
 
+    // --- Wiersze danych (od 10) ---
     const startRow = 10;
     prods.forEach((p, i) => {
       const r = startRow + i;
@@ -893,60 +938,79 @@
       const vatFrac = parsePct(p.vat);
       const brutto = p.promocja_netto != null && vatFrac != null ? (+p.promocja_netto) * (1 + vatFrac) : null;
 
-      setCell("A" + r, i + 1, styleCell);
-      setCell("B" + r, p.towar_id, styleCell);
-      setCell("C" + r, p.nazwa, styleCellName);
-      setCell("D" + r, p.jm || "", styleCell);
-      setCell("E" + r, p.cena_famix != null ? Number(p.cena_famix) : "", styleCellNum);
+      setCell("A" + r, p.towar_id, styleCell);                                                 // Indeks
+      setCell("B" + r, p.nazwa, styleCellName);                                                // Nazwa
+      setCell("C" + r, p.jm || "", styleCell);                                                 // Jm
+      setCell("D" + r, p.cena_famix != null ? Number(p.cena_famix) : "", styleCellNum);        // Cena Fam.
       if (vatFrac != null) {
-        ws["F" + r] = { v: vatFrac, s: styleCellPct, t: "n" };
+        ws["E" + r] = { v: vatFrac, s: styleCellPct, t: "n" };                                  // VAT (frakcja)
       } else {
-        setCell("F" + r, p.vat || "", styleCell);
+        setCell("E" + r, p.vat || "", styleCell);
       }
-      setCell("G" + r, p.stale != null ? Number(p.stale) : "", styleCellPct);
-      setCell("H" + r, afterStale != null ? Number(afterStale) : "", styleCellNum);
-      setCell("I" + r, p.rabat_prom != null ? Number(p.rabat_prom) : "", styleCellPct);
-      if (p.rabat_zo === "Z" || p.rabat_zo === "O") {
-        ws["J" + r] = {
+      setCell("F" + r, p.stale != null ? Number(p.stale) : "", styleCellPct);                   // Rabat stały
+      setCell("G" + r, afterStale != null ? Number(afterStale) : "", styleCellNum);             // Cena po rab. stał.
+      setCell("H" + r, p.rabat_prom != null ? Number(p.rabat_prom) : "", styleCellPct);         // Rabat prom
+      if (p.rabat_zo === "Z" || p.rabat_zo === "O") {                                           // Rab. Z/O
+        ws["I" + r] = {
           v: p.rabat_zo,
           s: { border, font:{sz:11,bold:true}, alignment:{horizontal:"center",vertical:"center"} },
           t: "s",
         };
       } else {
-        setCell("J" + r, "", styleCell);
+        setCell("I" + r, "", styleCell);
       }
-      setCell("K" + r, afterProm != null ? Number(afterProm) : "", styleCellNum);
-      setCell("L" + r, p.refundacja != null ? Number(p.refundacja) : "", styleCellNum);
-      setCell("M" + r, p.promocja_netto != null ? Number(p.promocja_netto) : "", styleCellNum);
-      setCell("N" + r, brutto != null ? Number(brutto) : "", styleCellNum);
-      setCell("O" + r, p.prom_rabat || "", styleCell);
-      setCell("P" + r, p.prom_pakietowa || "", styleCellName);
-      setCell("Q" + r, p.uwagi || "", styleCellName);
+      setCell("J" + r, afterProm != null ? Number(afterProm) : "", styleCellNum);               // C. po rab. prom.
+      setCell("K" + r, p.refundacja != null ? Number(p.refundacja) : "", styleCellNum);         // Refund. odsp.
+      setCell("L" + r, p.promocja_netto != null ? Number(p.promocja_netto) : "", styleCellNum); // Prom. Netto
+      setCell("M" + r, brutto != null ? Number(brutto) : "", styleCellNum);                     // Prom. Brutto
+      setCell("N" + r, p.prom_rabat || "", styleCell);                                          // Prom. rabat.
+      setCell("O" + r, p.prom_pakietowa || "", styleCellName);                                  // Promocja Pakietowa
+      setCell("P" + r, p.uwagi || "", styleCellName);                                           // Uwagi
     });
 
+    // --- Merges ---
     ws["!merges"] = [
-      { s:{r:0,c:5}, e:{r:0,c:13} },
-      { s:{r:1,c:5}, e:{r:1,c:13} },
-      { s:{r:2,c:5}, e:{r:2,c:13} },
-      { s:{r:5,c:1}, e:{r:5,c:3} },
-      { s:{r:5,c:4}, e:{r:5,c:6} },
-      { s:{r:5,c:7}, e:{r:5,c:9} },
-      { s:{r:5,c:10}, e:{r:5,c:16} },
-      ...["A","B","C","D","E","F","G","H","I","J","K","L","O","P","Q"].map((col) => {
-        const c = XLSX.utils.decode_col(col);
-        return { s:{r:7,c}, e:{r:8,c} };
+      // Nagłówek tytułu (E1:M1, E2:M2, E3:M3)
+      { s:{r:0,c:4}, e:{r:0,c:12} },
+      { s:{r:1,c:4}, e:{r:1,c:12} },
+      { s:{r:2,c:4}, e:{r:2,c:12} },
+      // Meta: producent (A6:C6), moduł (D6:F6), opłata (G6:I6), kontakt (J6:P6)
+      { s:{r:5,c:0}, e:{r:5,c:2} },
+      { s:{r:5,c:3}, e:{r:5,c:5} },
+      { s:{r:5,c:6}, e:{r:5,c:8} },
+      { s:{r:5,c:9}, e:{r:5,c:15} },
+      // Nagłówki tabeli: rowspan=2 dla kolumn które nie są pod "Promocja cenowa"
+      ...["A","B","C","D","E","F","G","H","I","J","K","N","O","P"].map((col) => {
+        const ci = XLSX.utils.decode_col(col);
+        return { s:{r:7,c:ci}, e:{r:8,c:ci} };
       }),
-      { s:{r:7,c:12}, e:{r:7,c:13} },
+      // "Promocja cenowa" — colspan 2 (L8:M8)
+      { s:{r:7,c:11}, e:{r:7,c:12} },
     ];
 
+    // --- Szerokości kolumn ---
     ws["!cols"] = [
-      { wch:5 },{ wch:10 },{ wch:40 },{ wch:6 },{ wch:10 },{ wch:7 },{ wch:10 },{ wch:12 },
-      { wch:10 },{ wch:10 },{ wch:12 },{ wch:10 },{ wch:10 },{ wch:10 },{ wch:10 },{ wch:16 },{ wch:30 },
+      { wch:10 },  // A Indeks
+      { wch:40 },  // B Nazwa
+      { wch:6 },   // C Jm
+      { wch:10 },  // D Cena Fam.
+      { wch:7 },   // E VAT
+      { wch:10 },  // F Rabat stały
+      { wch:12 },  // G Cena po rab. stał.
+      { wch:10 },  // H Rabat prom
+      { wch:10 },  // I Rab. Z/O
+      { wch:12 },  // J C. po rab. prom.
+      { wch:10 },  // K Refund.
+      { wch:10 },  // L Netto
+      { wch:10 },  // M Brutto
+      { wch:10 },  // N Prom. rabat.
+      { wch:16 },  // O Promocja Pakietowa
+      { wch:30 },  // P Uwagi
     ];
     ws["!rows"] = [ { hpx:18 },{ hpx:22 },{ hpx:18 },{ hpx:10 },{ hpx:16 },{ hpx:28 },{ hpx:10 },{ hpx:28 },{ hpx:18 } ];
 
     const lastRow = startRow + prods.length - 1;
-    ws["!ref"] = `A1:Q${Math.max(lastRow, 10)}`;
+    ws["!ref"] = `A1:P${Math.max(lastRow, 10)}`;
     ws["!pageSetup"] = { orientation:"landscape", paperSize:9 };
     ws["!margins"] = { left:0.3, right:0.3, top:0.4, bottom:0.4, header:0.2, footer:0.2 };
 

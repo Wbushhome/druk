@@ -362,20 +362,23 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .edit-head, .edit-body > .edit-row {
   display: grid;
   grid-template-columns:
-    56px                   /* Indeks */
-    minmax(150px, 1.3fr)   /* Nazwa */
-    78px                   /* Cena FAMIX */
-    48px                   /* VAT */
-    68px                   /* Rab. stały */
-    68px                   /* Po rab. */
-    68px                   /* Rab. prom */
-    54px                   /* Z/O */
-    82px                   /* Prom. netto */
-    70px                   /* Refund. */
-    76px                   /* Prom. rabat */
-    minmax(90px, 0.9fr)    /* Prom. pakiet. */
-    minmax(90px, 1fr)      /* Uwagi */
-    30px;                  /* Usuń */
+    50px                  /* Indeks */
+    minmax(140px, 1.3fr)  /* Nazwa */
+    42px                  /* Jm */
+    72px                  /* Cena FAMIX */
+    46px                  /* VAT */
+    60px                  /* Rabat stały */
+    64px                  /* Po rab. stał. */
+    60px                  /* Rabat prom */
+    50px                  /* Z/O */
+    64px                  /* C. po rab. prom. */
+    62px                  /* Refund. */
+    72px                  /* Prom. netto */
+    72px                  /* Prom. brutto */
+    68px                  /* Prom. rabat */
+    minmax(84px, 0.9fr)   /* Prom. pakiet. */
+    minmax(84px, 1fr)     /* Uwagi */
+    28px;                 /* Usuń */
   align-items: stretch;
 }
 .pick-head, .edit-head {
@@ -486,6 +489,14 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding-right: 8px;
   font-size: 12px;
   font-style: italic;
+}
+.edit-row .c-center {
+  justify-content: center;
+  text-align: center;
+  color: var(--label-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding: 0 4px;
 }
 
 /* Kontrolka Z/O — mini segmented */
@@ -738,7 +749,7 @@ input[type="checkbox"]:disabled {
 }
 @media (max-width: 1100px) {
   .table-wrap { overflow: auto; }
-  .edit-head, .edit-body > .edit-row { min-width: 1040px; }
+  .edit-head, .edit-body > .edit-row { min-width: 1180px; }
   .pick-head, .pick-body > .pick-row { min-width: 500px; }
 }
 @media (max-width: 820px) {
