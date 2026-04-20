@@ -370,7 +370,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
     58px                  /* Rabat stały */
     62px                  /* Po rab. stał. */
     58px                  /* Rabat prom */
-    48px                  /* Z/O */
+    58px                  /* Z/O — szersze, żeby przyciski Z i O się zmieściły */
     62px                  /* C. po rab. prom. */
     60px                  /* Refund. */
     70px                  /* Prom. netto */
@@ -793,7 +793,7 @@ input[type="checkbox"]:disabled {
 }
 @media (max-width: 1100px) {
   .table-wrap { overflow: auto; }
-  .edit-head, .edit-body > .edit-row { min-width: 1240px; }
+  .edit-head, .edit-body > .edit-row { min-width: 1250px; }
   .pick-head, .pick-body > .pick-row { min-width: 500px; }
 }
 @media (max-width: 820px) {

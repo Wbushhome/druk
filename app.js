@@ -246,8 +246,10 @@
       : null;
 
     let marza = null;
-    if (afterProm != null && afterProm !== 0 && m.cena_z != null && +m.cena_z > 0) {
-      marza = (afterProm - (+m.cena_z)) / afterProm;
+    const promNetto = m.promocja_netto != null ? +m.promocja_netto : null;
+    if (promNetto != null && promNetto !== 0 && afterProm != null) {
+      // Marża handlowa: (cena sprzedaży − cena zakupu) / cena sprzedaży
+      marza = (promNetto - afterProm) / promNetto;
     }
 
     return { afterStale, afterProm, brutto, marza, vatFrac };
@@ -451,7 +453,7 @@
                  placeholder="—" title="Uwagi" />
         </div>
 
-        <div class="c-marza${marzaClass}" data-computed="marza" title="Marża % = (C. po rab. prom. − Cena zakupu AC) / C. po rab. prom.">${marzaText}</div>
+        <div class="c-marza${marzaClass}" data-computed="marza" title="Marża handlowa = (Prom. netto − C. po rab. prom.) / Prom. netto">${marzaText}</div>
 
         <div class="c-chk">
           <button class="btn btn-icon" data-remove="${escapeAttr(id)}" title="Usuń z druku" aria-label="Usuń">
